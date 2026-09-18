@@ -1,0 +1,15 @@
+# All text files use LF everywhere; Windows checkouts must not convert to CRLF
+# (prepare-prototype.mjs matches exact strings with \n against the reference).
+* text=auto eol=lf
+
+# Binaries — never normalize
+*.db binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.xlsx binary
+*.xls binary
+*.deb binary
