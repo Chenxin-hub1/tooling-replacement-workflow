@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+const e2ePort = process.env.E2E_PORT ?? "8001";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -18,13 +19,12 @@ export default defineConfig({
   webServer: [
     {
       command: "../backend/.venv/bin/python ../scripts/e2e-server.py",
-      url: "http://127.0.0.1:8001/health",
+      url: `http://127.0.0.1:${e2ePort}/health`,
       reuseExistingServer: false,
       timeout: 30000,
     },
     {
-      command:
-        "API_PROXY_TARGET=http://127.0.0.1:8001 bun run dev -- --port 5174",
+      command: `API_PROXY_TARGET=http://127.0.0.1:${e2ePort} bun run dev -- --port 5174`,
       url: "http://127.0.0.1:5174",
       reuseExistingServer: false,
       timeout: 30000,

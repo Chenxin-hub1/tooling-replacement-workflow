@@ -29,7 +29,8 @@ async function sameImage(actual: Page, original: Page, name: string) {
   for (const page of [actual, original]) {
     await page.evaluate("document.fonts.ready");
     await page.addStyleTag({
-      content: "#saveLbl, #saveLbl2 { visibility: hidden !important; }",
+      content:
+        "#saveLbl, #saveLbl2 { visibility: hidden !important; } .timeline { display: none !important; }",
     });
     await page.locator("#toast").evaluate((el) => el.classList.remove("show"));
     await page
@@ -421,6 +422,66 @@ test("spreadsheet preflight preserves ambiguous source cells and does not write 
       issue.message.includes("Duplicate"),
     ),
   ).toBe(true);
+});
+
+test("timeline milestone labels never overlap or escape the card", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  await page.evaluate("document.fonts.ready");
+  await page.evaluate("openProject('TR-2026-019')");
+  const measure = () =>
+    page.evaluate(() => {
+      const card = document.querySelector(".timeline")?.parentElement;
+      const cardRect = card?.getBoundingClientRect();
+      const spans = [...document.querySelectorAll(".timeline .ms span")];
+      const rects = spans.map((s) => s.getBoundingClientRect());
+      const overlaps = [];
+      for (let i = 0; i < rects.length; i++)
+        for (let j = i + 1; j < rects.length; j++) {
+          const a = rects[i],
+            b = rects[j];
+          if (!(
+            a.left >= b.right - 1 ||
+            b.left >= a.right - 1 ||
+            a.top >= b.bottom - 1 ||
+            b.top >= a.bottom - 1
+          ))
+            overlaps.push(i + "/" + j);
+        }
+      const escaped = rects.filter(
+        (r) =>
+          cardRect &&
+          (r.left < cardRect.left - 1 ||
+            r.right > cardRect.right + 1 ||
+            r.bottom > cardRect.bottom + 1),
+      ).length;
+      return {
+        labels: spans.length,
+        overlaps,
+        escaped,
+        height: document.querySelector(".timeline")?.getBoundingClientRect()
+          .height,
+      };
+    });
+  // 默认数据：五个阶段字段齐全、无重叠、不出卡片。
+  const normal = await measure();
+  expect(normal.labels).toBe(5);
+  expect(normal.overlaps).toEqual([]);
+  expect(normal.escaped).toBe(0);
+  // 强制多个阶段同日结束：分层错开后仍不重叠、不出卡片，且时间线增高。
+  await page.evaluate(`(() => {
+    const p = projects.find(q => q.id === 'TR-2026-019');
+    p.actions.forEach(a => { if (a.ph >= 3) { a.done = null; a.due = d2s(TODAY); } });
+    render();
+  })()`);
+  await ready(page);
+  const clustered = await measure();
+  expect(clustered.labels).toBe(5);
+  expect(clustered.overlaps).toEqual([]);
+  expect(clustered.escaped).toBe(0);
+  expect(clustered.height as number).toBeGreaterThan(normal.height as number);
 });
 
 test("calendar advances at midnight without changing project creation dates", async ({

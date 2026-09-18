@@ -232,8 +232,8 @@ function rPortfolio(){
    <td>${stTag(s.overall,PSL[s.overall])}</td>
    <td><span class="pct"><span class="bar"><i style="width:${s.pct}%"></i></span>${s.pct}%</span></td>
    <td>${p.owner}</td>
-   <td class="num">${s.leadTotal} d${s.adjusted?`<br><span class="adj hint">${s.adjusted} adjusted</span>`:''}</td>
-   <td>${fmt(s.target)}${s.undated?`<br><span class="hint">${s.undated} undated</span>`:''}</td>
+   <td class="num">${s.leadTotal} d${s.adjusted?`<span class="adj hint" style="display:block;line-height:1.5708em">${s.adjusted} adjusted</span>`:''}</td>
+   <td>${fmt(s.target)}${s.undated?`<span class="hint" style="display:block;line-height:1.5708em">${s.undated} undated</span>`:''}</td>
    <td>${s.next?`${s.next.tab}<br><span class="muted">${fmt(s.next.due)}</span>`:'<span class="muted">—</span>'}</td>
    <td class="num">${s.red?`<span class="st red">${s.red}</span>`:'<span class="muted">0</span>'}</td>
    ${isAdmin(me)?`<td><button class="link" style="font-size:12px;color:var(--r)" onclick="event.stopPropagation();deleteProject('${p.id}')">delete</button></td>`:''}</tr>`}).join('');

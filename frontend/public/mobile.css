@@ -1,4 +1,7 @@
-/* 仅优化小屏操作，桌面沿用样板原 CSS。 */
+/* 小屏布局适配 + 桌面滚动性能优化；不改变样板视觉。 */
+/* 滚动性能：悬停行只重绘一个盒子（悬停时才生效，不影响截图比对）。 */
+tr.row:hover td { background: transparent; }
+tr.row:hover { background: #F8FAFC; }
 @media (max-width: 900px) {
   .shell { min-width: 0; }
   .shell > *, .grid > *, .card { min-width: 0; }

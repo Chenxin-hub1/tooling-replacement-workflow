@@ -85,10 +85,50 @@ setLead = function (index, value) {
   originalSetLead(index, value);
 };
 const originalRender = render;
+// 时间线标签按实测布局：里程碑同坐标或相邻时标签会叠字（真实数据 46 个项目同日创建暴露）。
+// 渲染后逐个测量标签矩形，冲突的逐层下移，时间线按需增高；贴边标签向内对齐，不探出卡片。
+function layoutTimeline() {
+  const timeline = document.querySelector(".timeline");
+  if (!timeline) return;
+  const spans = [...timeline.querySelectorAll(".ms span")];
+  for (const span of spans)
+    span.style.cssText = "";
+  timeline.style.height = "";
+  const inner = timeline.getBoundingClientRect();
+  const placed = [];
+  let maxLane = 0;
+  spans
+    .map((span) => ({ span, rect: span.getBoundingClientRect() }))
+    .sort((a, b) => a.rect.left - b.rect.left)
+    .forEach(({ span, rect }) => {
+      let lane = 0;
+      while (
+        placed.some(
+          (item) =>
+            item.lane === lane &&
+            !(rect.left >= item.right - 1 || item.left >= rect.right - 1),
+        )
+      )
+        lane++;
+      maxLane = Math.max(maxLane, lane);
+      placed.push({ lane, left: rect.left, right: rect.right });
+      if (lane) span.style.top = `${18 + lane * 17}px`;
+      if (rect.left < inner.left - 1) {
+        span.style.left = "7px";
+        span.style.transform = "none";
+      } else if (rect.right > inner.right + 1) {
+        span.style.left = "auto";
+        span.style.right = "7px";
+        span.style.transform = "none";
+      }
+    });
+  if (maxLane) timeline.style.height = `${18 + (maxLane + 1) * 17 + 16}px`;
+}
 render = function () {
   const now = new Date();
   TODAY.setTime(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
   originalRender();
+  layoutTimeline();
   document
     .querySelectorAll(".rule input[type=number]")
     .forEach((input, index) => {
@@ -117,6 +157,8 @@ render = function () {
         "Preview mode: no email or Teams message is sent. Rules and message previews are retained; a delivery service can be connected later if required.";
   }
 };
+// 字体加载完成后标签宽度会变，按新宽度重排一次时间线。
+if (document.fonts) document.fonts.ready.then(() => layoutTimeline());
 function refreshCalendar() {
   const date = new Date();
   const next = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());

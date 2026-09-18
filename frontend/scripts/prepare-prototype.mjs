@@ -57,6 +57,16 @@ replaceOnce(
   "{day:'2-digit',month:'short',year:'numeric'}",
   "{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}",
 );
+// 数值与注释改为块级堆叠：任何字体/缩放下两行都不可能叠字（真实数据在部分浏览器上出现过叠加）。
+// 行盒高度按单元格 13px×1.45 换算（12px 字号 ×1.5708em），与原 <br> 渲染逐像素一致。
+replaceOnce(
+  "<td class=\"num\">${s.leadTotal} d${s.adjusted?`<br><span class=\"adj hint\">${s.adjusted} adjusted</span>`:''}</td>",
+  "<td class=\"num\">${s.leadTotal} d${s.adjusted?`<span class=\"adj hint\" style=\"display:block;line-height:1.5708em\">${s.adjusted} adjusted</span>`:''}</td>",
+);
+replaceOnce(
+  "<td>${fmt(s.target)}${s.undated?`<br><span class=\"hint\">${s.undated} undated</span>`:''}</td>",
+  "<td>${fmt(s.target)}${s.undated?`<span class=\"hint\" style=\"display:block;line-height:1.5708em\">${s.undated} undated</span>`:''}</td>",
+);
 html = html
   .replaceAll(
     "assignment emails queued",
@@ -86,9 +96,17 @@ const match = html.match(/<script>\n([\s\S]*?)<\/script>/);
 if (!match) throw new Error("Prototype script not found");
 mkdirSync(new URL("../public/", import.meta.url), { recursive: true });
 writeFileSync(new URL("../public/prototype.js", import.meta.url), match[1]);
+// 内容版本号：脚本一变引用即变，浏览器不会继续用缓存的旧版。
+const bundleHash = createHash("sha256")
+  .update(html)
+  .update(readFileSync(new URL("../public/workflow-core.js", import.meta.url)))
+  .update(readFileSync(new URL("../public/improvements.js", import.meta.url)))
+  .update(readFileSync(new URL("../public/workspace.js", import.meta.url)))
+  .digest("hex")
+  .slice(0, 10);
 html = html.replace(
   match[0],
-  '<script src="/prototype.js"></script>\n<script src="/workflow-core.js"></script>\n<script src="/improvements.js"></script>\n<script src="/workspace.js"></script>',
+  `<script src="/prototype.js?v=${bundleHash}"></script>\n<script src="/workflow-core.js?v=${bundleHash}"></script>\n<script src="/improvements.js?v=${bundleHash}"></script>\n<script src="/workspace.js?v=${bundleHash}"></script>`,
 );
 html = html.replace(
   "</head>",
