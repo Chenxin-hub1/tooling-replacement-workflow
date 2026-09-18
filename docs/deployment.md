@@ -72,7 +72,7 @@ UI 使用 `GET/PUT /api/workspace`，SQLite `workspaces` 行保存所有项目�
 
 先在当前电脑完成；之后由用户在服务器从 Git 拉取代码。拉取后执行 `./scripts/start.sh`，或在安装了 Docker 的服务器执行 `docker compose up --build -d`。`.design/reference/` 必须纳入 Git 和 Docker 构建上下文，运行时无需访问用户的 Windows 桌面。更新前用 SQLite 备份脚本备份工作区数据库，再停止旧进程、拉取、重新启动。
 
-本机仓库目前未配置 Git remote，也没有提交历史；尚未推送任何远端。用户目前要求暂不上传；以后由用户决定何时提交和推送。数据库、环境变量和构建产物已设置忽略，不应作为代码提交。
+2026-09-18 更新：仓库已推送至 `git@github.com:Chenxin-hub1/tooling-replacement-workflow.git`（Private，main 分支）。按用户决定，业务数据库 `backend/tooling.db` **随仓库提交**——Git 是代码与数据的单一部署通道；`.demo/`、`.playwright-mcp/` 与 WAL/SHM 临时文件仍被忽略。提交数据库前必须先合并 WAL（`PRAGMA wal_checkpoint(TRUNCATE)`，或停服后提交），否则提交到的是旧数据。服务器更新流程：备份数据库 → 停止旧进程 → `git pull` → 重新启动 `./scripts/start.sh`（局域网访问设 `TOOLING_HOST=0.0.0.0`）。
 
 ## 当前服务范围
 

@@ -47,4 +47,4 @@ cd ..
 - [Excel 使用说明](docs/excel.md)
 - [当前路线图](constitution-doc/roadmap/v1-tooling-workflow.md)
 
-真实 Excel 已于 2026-09-18 按领导指示正式导入（46 条，创建日期统一导入当日；备份与核对记录见 [接入前核对](docs/real-data-readiness.md)）；BPW / CVS CR 等歧义映射仍待业务确认，确认后重导即按身份更新。本机服务：<http://localhost:8765>（8000 端口被其他应用占用）。按用户要求暂不上传 Git。
+真实 Excel 已于 2026-09-18 按领导指示正式导入（46 条，创建日期统一导入当日；备份与核对记录见 [接入前核对](docs/real-data-readiness.md)）；BPW / CVS CR 等歧义映射仍待业务确认，确认后重导即按身份更新。本机服务：<http://localhost:8765>（8000 端口被其他应用占用）。仓库已于 2026-09-18 推送至 GitHub（Chenxin-hub1/tooling-replacement-workflow，Private）；按用户决定，业务数据库 `backend/tooling.db` 随仓库分发，Git 是代码与数据的单一部署通道。
