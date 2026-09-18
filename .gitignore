@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+# 业务数据库随仓库分发（用户决定：部署走 Git 单通道，数据含在内）
+!backend/tooling.db
+node_modules/
+dist/
+.skills-doc/teach/
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
+.demo/
+.playwright-mcp/

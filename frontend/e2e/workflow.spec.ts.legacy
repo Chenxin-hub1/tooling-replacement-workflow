@@ -1,0 +1,224 @@
+import { test, expect } from "@playwright/test";
+import { mkdirSync } from "node:fs";
+
+test("create, persist, edit, assign, complete, reopen, add/delete and exchange Excel", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Tooling portfolio" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "New project", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(
+    page.getByText("Too small:", { exact: false }).first(),
+  ).toBeVisible();
+  await page.getByLabel("Part number *", { exact: true }).fill("E2E-001");
+  await page
+    .getByLabel("Part description *", { exact: true })
+    .fill("Browser test housing");
+  await page.getByLabel("Plant", { exact: true }).fill("Changchun");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByLabel("SDE", { exact: true }).fill("Alice");
+  await page.getByLabel("BU Buyer", { exact: true }).fill("Buyer A");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Create project", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Browser test housing", exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/projects\/TR-/);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Browser test housing", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Edit CR", exact: true }).click();
+  await page.getByLabel("Value · CR number").fill("CR-2026-001");
+  await page.getByRole("button", { name: "Mark complete today" }).click();
+  await page.getByRole("button", { name: "Save action", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("CR-2026-001", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit project", exact: true }).click();
+  await page.getByLabel("SDE", { exact: true }).fill("Carol");
+  await page.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("SDE · Alice", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("SDE · Carol", { exact: true }).first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Edit CR", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reopen action", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Save action", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add action", exact: true }).click();
+  await page.getByLabel("Action name *", { exact: true }).fill("Custom review");
+  await page
+    .getByLabel("Instructions *", { exact: true })
+    .fill("Review the tool drawing");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add action", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Custom review", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Delete Custom review", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Delete action", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Custom review", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "My actions", exact: true }).click();
+  await page.getByLabel("Assigned to", { exact: true }).selectOption("Carol");
+  await expect(page.getByRole("table")).toContainText("Carol");
+  await page.getByRole("link", { name: "Data exchange", exact: true }).click();
+  const dl = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export all projects", exact: true })
+    .click();
+  const file = await dl;
+  const path = await file.path();
+  expect(path).toBeTruthy();
+  await page.getByLabel("Excel workbook").setInputFiles({
+    name: "tooling.xlsx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: await (await import("node:fs/promises")).readFile(path!),
+  });
+  await page.getByLabel("Import mode").selectOption("upsert");
+  await page
+    .getByRole("button", { name: "Preview import", exact: true })
+    .click();
+  await expect(
+    page.getByText("Workbook is ready to import", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Confirm import", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Import complete", exact: true }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("portfolio filtering, management, mobile navigation and screenshots", async ({
+  page,
+  request,
+}) => {
+  const samples = [
+    [
+      "Steering wheel frame",
+      "Aschau",
+      "Steering Wheel",
+      "Magna Casting",
+      "Precision Works",
+      "2026-01-01",
+    ],
+    [
+      "Airbag cover tooling",
+      "Changchun",
+      "Airbag",
+      "Nordform",
+      "Evergreen Tooling",
+      "2026-08-01",
+    ],
+    [
+      "Seatbelt retractor housing",
+      "Częstochowa",
+      "Seatbelt",
+      "AutoCast",
+      "Novatech",
+      "2026-09-12",
+    ],
+    [
+      "Passenger airbag bracket",
+      "Aschau",
+      "Airbag",
+      "FormaTech",
+      "Precision Works",
+      "2027-01-01",
+    ],
+  ];
+  for (let i = 0; i < samples.length; i++) {
+    const [desc, plant, bu, cur, nw, created_at] = samples[i];
+    const response = await request.post("http://127.0.0.1:8001/api/projects", {
+      data: {
+        id: `DEMO-${i + 1}`,
+        pn: `ZF-400${i}21`,
+        desc,
+        plant,
+        bu,
+        cur,
+        nw,
+        created_at,
+        owner: ["Carrie Chen", "Daniel Wu", "Marta Kowalski", "Thomas Becker"][
+          i
+        ],
+        team: {
+          "BU Buyer": [
+            "Carrie Chen",
+            "Daniel Wu",
+            "Marta Kowalski",
+            "Thomas Becker",
+          ][i],
+          SDE: "Alex Morgan",
+        },
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Tooling portfolio" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Steering wheel frame", { exact: true }),
+  ).toBeVisible();
+  mkdirSync("../.design/screenshots", { recursive: true });
+  await page.screenshot({
+    path: "../.design/screenshots/portfolio-desktop.png",
+    fullPage: true,
+  });
+  await page.getByLabel("Search projects").fill("Steering wheel");
+  await expect(
+    page.getByText("Steering wheel frame", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Airbag cover tooling", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.getByRole("button", { name: "Table view" }).click();
+  await expect(page.getByRole("table")).toContainText("Airbag cover tooling");
+  await page.getByRole("link", { name: "Management", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Lifecycle distribution" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../.design/screenshots/management-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("link", { name: "Portfolio", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Tooling portfolio" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBeTruthy();
+  await page.screenshot({
+    path: "../.design/screenshots/portfolio-mobile.png",
+    fullPage: true,
+  });
+});

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tooling Replacement Workflow</title>
+<link href="/vendor/fonts.css" rel="stylesheet">
+<script src="/vendor/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#16202B; --steel:#3E4C5B; --mist:#7A8794; --line:#D7DDE3; --panel:#F3F5F7; --paper:#FFFFFF;
+  --blue:#1F4E8C; --blue-soft:#E4ECF7;
+  --g:#1E8E5A; --g-soft:#DFF3E8; --y:#C98A00; --y-soft:#FFF1CC; --r:#C8362B; --r-soft:#FBE1DE; --gr:#A7B0B8; --gr-soft:#EDF0F2;
+  --radius:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:14px;color:var(--ink);background:var(--panel);line-height:1.45}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink)}
+a{color:var(--blue)}
+
+/* shell */
+.shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.rail{background:var(--ink);color:#C9D2DB;padding:22px 16px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
+.rail .brand{color:#fff;font-weight:600;font-size:15px;letter-spacing:.01em;margin-bottom:4px}
+.rail .brand small{display:block;font-weight:400;color:#8A97A4;font-size:12px;margin-top:2px}
+.rail .who{margin:14px 0 18px;background:#22303D;border-radius:var(--radius);padding:8px 10px;font-size:12px;color:#B9C4CF}
+.rail .who input,.rail .who select{width:100%;margin-top:4px;background:#16202B;color:#fff;border:1px solid #3B4B5B;border-radius:4px;padding:5px 6px;font-size:13px}
+.rail .who select option{background:#16202B;color:#fff}
+.nav{background:none;border:0;color:#C9D2DB;text-align:left;padding:9px 10px;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.nav:hover{background:#22303D}
+.nav.active{background:var(--blue);color:#fff}
+.nav .pill{font-size:11px;background:#33414F;color:#fff;border-radius:10px;padding:1px 7px;font-weight:600}
+.nav.active .pill{background:rgba(255,255,255,.22)}
+.rail .spacer{flex:1}
+.rail .foot{font-size:11px;color:#6E7B88;line-height:1.5}
+.btn-new{background:#fff;color:var(--ink);border:0;padding:10px;border-radius:var(--radius);font-weight:600;margin-top:6px}
+.btn-new:hover{background:#E9EEF3}
+
+main{padding:26px 32px 60px;min-width:0}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600;margin-bottom:10px}
+.sub{color:var(--mist);font-size:13px;margin-top:2px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:18px}
+
+/* filters */
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center}
+.filters select,.filters input{border:1px solid var(--line);background:#fff;border-radius:var(--radius);padding:6px 8px;font-size:13px;min-width:120px}
+.filters .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 12px;font-size:13px}
+.filters .chip.on{background:var(--r-soft);border-color:var(--r);color:var(--r);font-weight:600}
+.filters .clear{background:none;border:0;color:var(--mist);text-decoration:underline;font-size:12px}
+
+/* cards & tables */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.grid{display:grid;gap:14px}
+.grid.c4{grid-template-columns:repeat(4,1fr)}
+.grid.c3{grid-template-columns:repeat(3,1fr)}
+.grid.c2{grid-template-columns:repeat(2,1fr)}
+.kpi{display:flex;flex-direction:column;gap:2px;border-left:4px solid var(--line)}
+.kpi b{font-size:28px;font-weight:600;line-height:1.1}
+.kpi span{color:var(--steel);font-size:13px}
+.kpi.g{border-left-color:var(--g)} .kpi.y{border-left-color:var(--y)} .kpi.r{border-left-color:var(--r)} .kpi.b{border-left-color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--steel);border-bottom:1px solid var(--line);padding:8px 10px;font-size:12px;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #EEF1F4;vertical-align:middle}
+tr.row:hover td{background:#F8FAFC;cursor:pointer}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.muted{color:var(--mist)}
+.bold{font-weight:600}
+
+/* status */
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.st{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
+.st.green{background:var(--g-soft);color:var(--g)} .st.yellow{background:var(--y-soft);color:var(--y)} .st.red{background:var(--r-soft);color:var(--r)} .st.gray{background:var(--gr-soft);color:var(--steel)}
+.dot.green{background:var(--g)} .dot.yellow{background:var(--y)} .dot.red{background:var(--r)} .dot.gray{background:var(--gr)}
+
+/* phase rail: signature element */
+.rail6{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;width:160px}
+.leadin{width:52px;border:1px solid var(--line);border-radius:4px;padding:3px 5px;text-align:right;font-size:12px}
+.adj{color:var(--blue);font-weight:600}
+.rail6 i{height:8px;border-radius:2px;background:var(--gr-soft);display:block;position:relative}
+.rail6 i.green{background:var(--g)} .rail6 i.yellow{background:var(--y)} .rail6 i.red{background:var(--r)}
+.rail6 i.current::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:2px;background:var(--ink);border-radius:1px}
+.pct{display:inline-flex;align-items:center;gap:8px}
+.bar{width:70px;height:6px;background:var(--gr-soft);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue)}
+
+/* project view */
+.phasehead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin:16px 0 6px;font-weight:600}
+.phasehead .meta{font-weight:400;color:var(--steel);font-size:12px;display:flex;gap:14px}
+.masters{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;font-size:13px}
+.masters div span{display:block;color:var(--mist);font-size:12px}
+.team{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px}
+.team div{border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px}
+.team div span{display:block;color:var(--mist);font-size:12px}
+.flags{list-style:none}
+.flags li{padding:6px 0;border-bottom:1px solid #EEF1F4;display:flex;gap:8px;align-items:center}
+.timeline{position:relative;height:56px;margin:8px 0 4px}
+.timeline .track{position:absolute;top:26px;left:0;right:0;height:4px;background:var(--gr-soft);border-radius:2px}
+.timeline .today{position:absolute;top:14px;width:2px;height:28px;background:var(--ink)}
+.timeline .today span{position:absolute;top:-16px;left:-14px;font-size:11px;color:var(--ink);font-weight:600}
+.timeline .ms{position:absolute;top:21px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.timeline .ms span{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--steel);white-space:nowrap}
+
+/* actions */
+.link{background:none;border:0;color:var(--blue);text-decoration:underline;padding:0}
+.btn{background:var(--blue);color:#fff;border:0;padding:7px 14px;border-radius:var(--radius);font-weight:600;font-size:13px}
+.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:12px}
+
+/* modal / wizard */
+.overlay{position:fixed;inset:0;background:rgba(22,32,43,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:8px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:22px 24px}
+.modal h2{font-size:17px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:12px;color:var(--steel);font-weight:500}
+.field input,.field select,.field textarea{border:1px solid var(--line);border-radius:var(--radius);padding:8px 9px;font-size:13px;background:#fff}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--blue);outline-offset:0;border-color:var(--blue)}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+.steps{display:flex;gap:6px;margin:6px 0 18px}
+.steps span{flex:1;height:4px;background:var(--gr-soft);border-radius:2px}
+.steps span.done{background:var(--blue)}
+.mfoot{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px}
+.req{color:var(--r)}
+.note{background:var(--blue-soft);border-radius:var(--radius);padding:10px 12px;font-size:13px;color:var(--steel);margin-bottom:12px}
+.hint{font-size:12px;color:var(--mist)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:var(--radius);font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+.toast.show{opacity:1}
+
+/* mgmt */
+.hbar{display:grid;grid-template-columns:150px 1fr 36px;gap:10px;align-items:center;font-size:13px;padding:5px 0}
+.hbar .b{height:14px;background:var(--r);border-radius:2px}
+.hbar .n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.mail{border-left:3px solid var(--line);padding:8px 12px;margin-bottom:8px;font-size:13px;background:#fff}
+.mail.esc{border-left-color:var(--r)} .mail.due{border-left-color:var(--y)} .mail.assign{border-left-color:var(--blue)}
+.mail .to{color:var(--mist);font-size:12px}
+.rule{display:grid;grid-template-columns:1fr 90px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #EEF1F4;font-size:13px}
+.rule input{width:80px;border:1px solid var(--line);border-radius:4px;padding:5px 7px;text-align:right}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{background:none;border:0;padding:8px 14px;color:var(--steel);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
+.empty{padding:40px;text-align:center;color:var(--mist)}
+.lt{display:flex;align-items:center;gap:12px}
+.lt input[type=range]{flex:1}
+.lt b{font-size:22px;min-width:90px}
+@media (max-width:900px){.shell{grid-template-columns:1fr}.rail{position:static;height:auto}.grid.c4,.grid.c3,.grid.c2,.masters,.team{grid-template-columns:1fr 1fr}main{padding:16px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<link rel="stylesheet" href="/mobile.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">Tooling Replacement Workflow</div>
+    <div class="who">Signed in as<select id="userSel" onchange="me=this.value;render()"></select></div>
+    <button class="nav" data-v="portfolio">Portfolio</button>
+    <button class="nav" data-v="mine">My actions <span class="pill" id="pillMine">0</span></button>
+    <button class="nav" data-v="mgmt">Management</button>
+    <button class="nav" data-v="settings">Reminders · Email / Teams <span class="pill" id="pillMail">0</span></button>
+    <button class="nav" data-v="admin">Admin · People &amp; functions</button>
+    <button class="btn-new" onclick="openWizard()">+ New project</button>
+    <div class="spacer"></div>
+    <div class="foot"><span id="saveLbl"></span><br>Today: <b id="todayLbl"></b><br>Prototype — six phases, owners, tabs, actions and default lead times from the process sheets. Items can be added per step.</div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<div class="overlay" id="wiz"><div class="modal" id="wizBody"></div></div>
+<div class="overlay" id="act"><div class="modal" id="actBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="/prototype.js"></script>
+<script src="/workflow-core.js"></script>
+<script src="/improvements.js"></script>
+<script src="/workspace.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+.git
+**/.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/*.db*
+**/.env
+**/.env.*
+**/test-results
+**/playwright-report
+.design/*
+!.design/reference/
+!.design/reference/**
+.skills-doc

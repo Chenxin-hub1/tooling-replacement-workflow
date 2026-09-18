@@ -1,0 +1,26 @@
+/* 仅优化小屏操作，桌面沿用样板原 CSS。 */
+@media (max-width: 900px) {
+  .shell { min-width: 0; }
+  .shell > *, .grid > *, .card { min-width: 0; }
+  .head { align-items: flex-start; flex-wrap: wrap; }
+  .head > div { max-width: 100%; flex-wrap: wrap; }
+  .filters input, .filters select { min-width: 0; max-width: 100%; }
+  .card { overflow-x: auto; }
+  .card > table { min-width: 1000px; }
+  .overlay { padding: 10px; }
+  .modal { padding: 16px; }
+  .modal input, .modal select, .modal textarea { min-width: 0; max-width: 100%; }
+  .modal table { display: block; overflow-x: auto; }
+  .hbar { grid-template-columns: minmax(100px, 150px) minmax(0, 1fr) 36px; }
+  .timeline { margin: 12px 24px 30px; }
+  .timeline .ms span { white-space: normal; width: 65px; text-align: center; }
+}
+@media (max-width: 560px) {
+  .f2, .f3, .grid.c4, .grid.c3, .grid.c2, .masters, .team { grid-template-columns: 1fr; }
+  .filters { display: grid; grid-template-columns: 1fr 1fr; }
+  .filters > * { width: 100%; }
+  .btn, .btn.sm, .filters input, .filters select { min-height: 40px; }
+  .mfoot { flex-wrap: wrap; }
+  .phasehead { flex-wrap: wrap; gap: 8px; }
+  .phasehead .meta { flex-wrap: wrap; }
+}

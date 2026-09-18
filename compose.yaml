@@ -1,0 +1,13 @@
+services:
+  tooling:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/tooling.db
+      TZ: Asia/Taipei
+    volumes:
+      - tooling-data:/data
+    restart: unless-stopped
+volumes:
+  tooling-data:

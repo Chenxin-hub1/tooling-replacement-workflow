@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tooling Replacement Workflow</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#16202B; --steel:#3E4C5B; --mist:#7A8794; --line:#D7DDE3; --panel:#F3F5F7; --paper:#FFFFFF;
+  --blue:#1F4E8C; --blue-soft:#E4ECF7;
+  --g:#1E8E5A; --g-soft:#DFF3E8; --y:#C98A00; --y-soft:#FFF1CC; --r:#C8362B; --r-soft:#FBE1DE; --gr:#A7B0B8; --gr-soft:#EDF0F2;
+  --radius:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:14px;color:var(--ink);background:var(--panel);line-height:1.45}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink)}
+a{color:var(--blue)}
+
+/* shell */
+.shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.rail{background:var(--ink);color:#C9D2DB;padding:22px 16px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
+.rail .brand{color:#fff;font-weight:600;font-size:15px;letter-spacing:.01em;margin-bottom:4px}
+.rail .brand small{display:block;font-weight:400;color:#8A97A4;font-size:12px;margin-top:2px}
+.rail .who{margin:14px 0 18px;background:#22303D;border-radius:var(--radius);padding:8px 10px;font-size:12px;color:#B9C4CF}
+.rail .who input,.rail .who select{width:100%;margin-top:4px;background:#16202B;color:#fff;border:1px solid #3B4B5B;border-radius:4px;padding:5px 6px;font-size:13px}
+.rail .who select option{background:#16202B;color:#fff}
+.nav{background:none;border:0;color:#C9D2DB;text-align:left;padding:9px 10px;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.nav:hover{background:#22303D}
+.nav.active{background:var(--blue);color:#fff}
+.nav .pill{font-size:11px;background:#33414F;color:#fff;border-radius:10px;padding:1px 7px;font-weight:600}
+.nav.active .pill{background:rgba(255,255,255,.22)}
+.rail .spacer{flex:1}
+.rail .foot{font-size:11px;color:#6E7B88;line-height:1.5}
+.btn-new{background:#fff;color:var(--ink);border:0;padding:10px;border-radius:var(--radius);font-weight:600;margin-top:6px}
+.btn-new:hover{background:#E9EEF3}
+
+main{padding:26px 32px 60px;min-width:0}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600;margin-bottom:10px}
+.sub{color:var(--mist);font-size:13px;margin-top:2px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:18px}
+
+/* filters */
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center}
+.filters select,.filters input{border:1px solid var(--line);background:#fff;border-radius:var(--radius);padding:6px 8px;font-size:13px;min-width:120px}
+.filters .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 12px;font-size:13px}
+.filters .chip.on{background:var(--r-soft);border-color:var(--r);color:var(--r);font-weight:600}
+.filters .clear{background:none;border:0;color:var(--mist);text-decoration:underline;font-size:12px}
+
+/* cards & tables */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.grid{display:grid;gap:14px}
+.grid.c4{grid-template-columns:repeat(4,1fr)}
+.grid.c3{grid-template-columns:repeat(3,1fr)}
+.grid.c2{grid-template-columns:repeat(2,1fr)}
+.kpi{display:flex;flex-direction:column;gap:2px;border-left:4px solid var(--line)}
+.kpi b{font-size:28px;font-weight:600;line-height:1.1}
+.kpi span{color:var(--steel);font-size:13px}
+.kpi.g{border-left-color:var(--g)} .kpi.y{border-left-color:var(--y)} .kpi.r{border-left-color:var(--r)} .kpi.b{border-left-color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--steel);border-bottom:1px solid var(--line);padding:8px 10px;font-size:12px;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #EEF1F4;vertical-align:middle}
+tr.row:hover td{background:#F8FAFC;cursor:pointer}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.muted{color:var(--mist)}
+.bold{font-weight:600}
+
+/* status */
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.st{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
+.st.green{background:var(--g-soft);color:var(--g)} .st.yellow{background:var(--y-soft);color:var(--y)} .st.red{background:var(--r-soft);color:var(--r)} .st.gray{background:var(--gr-soft);color:var(--steel)}
+.dot.green{background:var(--g)} .dot.yellow{background:var(--y)} .dot.red{background:var(--r)} .dot.gray{background:var(--gr)}
+
+/* phase rail: signature element */
+.rail6{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;width:160px}
+.leadin{width:52px;border:1px solid var(--line);border-radius:4px;padding:3px 5px;text-align:right;font-size:12px}
+.adj{color:var(--blue);font-weight:600}
+.rail6 i{height:8px;border-radius:2px;background:var(--gr-soft);display:block;position:relative}
+.rail6 i.green{background:var(--g)} .rail6 i.yellow{background:var(--y)} .rail6 i.red{background:var(--r)}
+.rail6 i.current::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:2px;background:var(--ink);border-radius:1px}
+.pct{display:inline-flex;align-items:center;gap:8px}
+.bar{width:70px;height:6px;background:var(--gr-soft);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue)}
+
+/* project view */
+.phasehead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin:16px 0 6px;font-weight:600}
+.phasehead .meta{font-weight:400;color:var(--steel);font-size:12px;display:flex;gap:14px}
+.masters{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;font-size:13px}
+.masters div span{display:block;color:var(--mist);font-size:12px}
+.team{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px}
+.team div{border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px}
+.team div span{display:block;color:var(--mist);font-size:12px}
+.flags{list-style:none}
+.flags li{padding:6px 0;border-bottom:1px solid #EEF1F4;display:flex;gap:8px;align-items:center}
+.timeline{position:relative;height:56px;margin:8px 0 4px}
+.timeline .track{position:absolute;top:26px;left:0;right:0;height:4px;background:var(--gr-soft);border-radius:2px}
+.timeline .today{position:absolute;top:14px;width:2px;height:28px;background:var(--ink)}
+.timeline .today span{position:absolute;top:-16px;left:-14px;font-size:11px;color:var(--ink);font-weight:600}
+.timeline .ms{position:absolute;top:21px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.timeline .ms span{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--steel);white-space:nowrap}
+
+/* actions */
+.link{background:none;border:0;color:var(--blue);text-decoration:underline;padding:0}
+.btn{background:var(--blue);color:#fff;border:0;padding:7px 14px;border-radius:var(--radius);font-weight:600;font-size:13px}
+.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:12px}
+
+/* modal / wizard */
+.overlay{position:fixed;inset:0;background:rgba(22,32,43,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:8px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:22px 24px}
+.modal h2{font-size:17px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:12px;color:var(--steel);font-weight:500}
+.field input,.field select,.field textarea{border:1px solid var(--line);border-radius:var(--radius);padding:8px 9px;font-size:13px;background:#fff}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--blue);outline-offset:0;border-color:var(--blue)}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+.steps{display:flex;gap:6px;margin:6px 0 18px}
+.steps span{flex:1;height:4px;background:var(--gr-soft);border-radius:2px}
+.steps span.done{background:var(--blue)}
+.mfoot{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px}
+.req{color:var(--r)}
+.note{background:var(--blue-soft);border-radius:var(--radius);padding:10px 12px;font-size:13px;color:var(--steel);margin-bottom:12px}
+.hint{font-size:12px;color:var(--mist)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:var(--radius);font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+.toast.show{opacity:1}
+
+/* mgmt */
+.hbar{display:grid;grid-template-columns:150px 1fr 36px;gap:10px;align-items:center;font-size:13px;padding:5px 0}
+.hbar .b{height:14px;background:var(--r);border-radius:2px}
+.hbar .n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.mail{border-left:3px solid var(--line);padding:8px 12px;margin-bottom:8px;font-size:13px;background:#fff}
+.mail.esc{border-left-color:var(--r)} .mail.due{border-left-color:var(--y)} .mail.assign{border-left-color:var(--blue)}
+.mail .to{color:var(--mist);font-size:12px}
+.rule{display:grid;grid-template-columns:1fr 90px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #EEF1F4;font-size:13px}
+.rule input{width:80px;border:1px solid var(--line);border-radius:4px;padding:5px 7px;text-align:right}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{background:none;border:0;padding:8px 14px;color:var(--steel);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
+.empty{padding:40px;text-align:center;color:var(--mist)}
+.lt{display:flex;align-items:center;gap:12px}
+.lt input[type=range]{flex:1}
+.lt b{font-size:22px;min-width:90px}
+@media (max-width:900px){.shell{grid-template-columns:1fr}.rail{position:static;height:auto}.grid.c4,.grid.c3,.grid.c2,.masters,.team{grid-template-columns:1fr 1fr}main{padding:16px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">Tooling Replacement Workflow</div>
+    <div class="who">Signed in as<select id="userSel" onchange="me=this.value;render()"></select></div>
+    <button class="nav" data-v="portfolio">Portfolio</button>
+    <button class="nav" data-v="mine">My actions <span class="pill" id="pillMine">0</span></button>
+    <button class="nav" data-v="mgmt">Management</button>
+    <button class="nav" data-v="settings">Reminders · Email / Teams <span class="pill" id="pillMail">0</span></button>
+    <button class="nav" data-v="admin">Admin · People &amp; functions</button>
+    <button class="btn-new" onclick="openWizard()">+ New project</button>
+    <div class="spacer"></div>
+    <div class="foot"><span id="saveLbl"></span><br>Today: <b id="todayLbl"></b><br>Prototype — six phases, owners, tabs, actions and default lead times from the process sheets. Items can be added per step.</div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<div class="overlay" id="wiz"><div class="modal" id="wizBody"></div></div>
+<div class="overlay" id="act"><div class="modal" id="actBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- constants ---------- */
+const TODAY = new Date('2026-09-12');
+const PHASES = ['1. Tool Creation','2. Development','3. Internal Approval','4. Customer Approval','5. Scrap','6. Archive'];
+const INIT_FIELDS=[['pn','Part Number'],['desc','Part Description'],['plant','Plant affected'],['reason','Reason'],['cur','Current Supplier'],['nw','New Supplier'],['po','Tool PO'],['tag','Tool Tag'],['tooOwner','Tool Owner'],['cav','Cavities'],['oem','OEM'],['tech','Tech'],['saving','Estimated saving (€/yr)']];
+let FUNCTIONS = ['BU Buyer','SDE','PM','ENG','SP/BU','Accounting'];
+const INITIATOR_FN='BU Buyer';
+let ADMINS=['Carrie Chen']; const isAdmin=n=>ADMINS.includes(n);
+let TEAM_ROWS=[['SDE','SDE'],['PM','PM'],['ENG','Engineer'],['SP/BU','Tactical/BU'],['Accounting','Accounting']];
+let REQUIRED_TEAM = ['SDE','PM','ENG','SP/BU'];
+
+/* Standard process template — 1:1 from the process Excel (Owner / Tab / Action / Due date since creation / Phase).
+   Phase 1 rows are the Initiator inputs (master data + team) and close on creation.
+   lead = default lead time in days counted from the predecessor (dep = index of the action it follows; null = project creation).
+   lead:null = sheet shows '-', '?' or blank → no default; authorized user must enter a lead time. */
+const MATRIX = [
+ {ph:1,tab:'CR',act:'Input CR number',input:'CR number',fn:'SDE',lead:7,dep:null},
+ {ph:1,tab:'PPAP ID',act:'Input PPAP ID number',input:'PPAP ID',fn:'BU Buyer',lead:7,dep:null},
+ {ph:1,tab:'FOT Date',act:"Input Supplier's target date for FOT",input:'Date',fn:'SDE',lead:7,dep:null},
+ {ph:1,tab:'PPAP Sample Date',act:"Input Supplier's target date for Samples",input:'Date',fn:'SDE',lead:7,dep:null},
+ {ph:1,tab:'PPAP Submission Date',act:"Input Supplier's target date for PPAP submission",input:'Date',fn:'SDE',lead:7,dep:null},
+ {ph:1,tab:'Current Coverage',act:'Input date of coverage on current supplier',input:'Date',fn:'BU Buyer',lead:7,dep:null},
+ {ph:1,tab:'BPO',act:'Input BPO number',input:'BPO number',fn:'SP/BU',lead:30,dep:null},
+ {ph:1,tab:'Change',act:'Identify if External or Internal',input:'External / Internal',fn:'PM',lead:7,dep:null},
+ {ph:1,tab:'SOP',act:'Input date needed by ZF to implement',input:'Date',fn:'BU Buyer',lead:7,dep:null},
+ {ph:2,tab:'CVS CR',act:'Identify if applicable or not',input:'Applicable / Not applicable',fn:'ENG',lead:null,dep:null},
+ {ph:2,tab:'CVS CR',act:'Input CR number for CVS on Windchill',input:'CR number',fn:'ENG',lead:null,dep:9},
+ {ph:2,tab:'PPAP Status',act:'Input if Draft, Interim approved, or Full approved',input:'Draft / Interim approved / Full approved',fn:'SDE',lead:null,dep:4},
+ {ph:2,tab:'Pre Grain',act:'Identify if applicable or not',input:'Applicable / Not applicable',fn:'SDE',lead:null,dep:null},
+ {ph:2,tab:'Pre Grain',act:'Input pre-grain target date approval',input:'Date',fn:'SDE',lead:null,dep:12},
+ {ph:2,tab:'Core BPW',act:'Input BPW number',input:'BPW number',fn:'PM',lead:175,dep:null},
+ {ph:2,tab:'Core BPW',act:'Input target date for approval',input:'Date',fn:'PM',lead:null,dep:14},
+ {ph:3,tab:'AAR',act:'Identify if applicable or not',input:'Applicable / Not applicable',fn:'SDE',lead:null,dep:null},
+ {ph:3,tab:'AAR',act:'Input target date for approval',input:'Date',fn:'SDE',lead:null,dep:16},
+ {ph:3,tab:'OEM BPW',act:'Identify BPW number',input:'BPW number',fn:'PM',lead:null,dep:null},
+ {ph:3,tab:'OEM BPW',act:'Input target date for approval',input:'Date',fn:'PM',lead:175,dep:null},
+ /* 5. Scrap — from the second sheet extract ("Tactical" = Tactical/BU = SP/BU). No lead times given yet. */
+ {ph:4,tab:'Old tool disposition',act:'Confirm scrap / return / storage / disposition if required',input:'Scrap / Return / Storage / Not required',fn:'SP/BU',lead:null,dep:null,comment:''},
+ {ph:4,tab:'Receive SCR request',act:'Request SCR from supplier to proceed with scrapping tool',input:'SCR reference',fn:'SDE',lead:null,dep:20,comment:''},
+ {ph:4,tab:'Prepare documentation for scrapping',act:'Review if tool can be scrapped and fill TDA format',input:'TDA document link',fn:'SP/BU',lead:null,dep:21,comment:''},
+ {ph:4,tab:'TDA Approval',act:'Review tool in the books / approval',input:'Approval date',fn:'Accounting',lead:null,dep:22,comment:''},
+ {ph:4,tab:'Scrap tool',act:'Confirm if internal scrapping or external scrap',input:'Internal / External',fn:'Accounting',lead:null,dep:23,comment:''},
+ /* 6. Archive (Doc. Storage) */
+ {ph:5,tab:'Prepare management review',act:'Prepare slides / summary / overdue list',input:'Review document link',fn:'SP/BU',lead:null,dep:null,comment:''},
+ {ph:5,tab:'Attend supplier status meeting',act:'Review multiple tooling projects with supplier',input:'Meeting date',fn:'SP/BU',lead:null,dep:null,comment:''},
+ {ph:5,tab:'Maintain tooling master list',act:'Update master list / Excel / SharePoint / system',input:'Update date',fn:'SP/BU',lead:null,dep:null,comment:''},
+ {ph:5,tab:'Upload / store documents',act:'Save RFQ / quote / PO / PPAP / approvals in required location',input:'Folder link',fn:'SP/BU',lead:null,dep:null,comment:''},
+ {ph:5,tab:'Search for historical information',act:'Search old emails / folders / systems for previous tooling data',input:'Findings / link',fn:'SP/BU',lead:null,dep:null,comment:''},
+ {ph:5,tab:'Correct data / tracker errors',act:'Correct tool status / ownership / timing / supplier information',input:'Correction date',fn:'SP/BU',lead:null,dep:null,comment:''},
+];
+let CUSTOM_SEQ=0;
+let MANUAL=[]; // manual reminders sent in this session {ts,by,to,cc,a,p,note}
+
+const PEOPLE = {
+ 'BU Buyer':['Carrie Chen','Marta Kowalski','Rahul Iyer'],
+ 'SDE':['Daniel Wu','Ines Bauer'],
+ 'PM':['Sofia Rossi','Tom Becker'],
+ 'ENG':['Ken Tanaka','Priya Nair'],
+ 'SP/BU':['Luis Ortega'],
+ 'Accounting':['Julia Lang','Wei Zhang'],
+};
+const EMAILS={};
+const email = n => n?(EMAILS[n]||n.toLowerCase().replace(/ /g,'.')+'@zf-lifetec.com'):'';
+let RULES = {before:5, overdueEvery:2, escalateAfter:5, channel:'both'};
+const CH={email:'✉ Email',teams:'💬 Teams',both:'✉ Email + 💬 Teams'};
+
+/* ---------- helpers ---------- */
+const d2s = d => d.toISOString().slice(0,10);
+const addDays = (d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const days = (a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+const fmt = s => s?new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'';
+
+function buildActions(p){
+  return MATRIX.map((m,i)=>({
+    id:p.id+'-'+i, ph:m.ph, tab:m.tab, act:m.act, input:m.input, fn:m.fn, dep:m.dep===null?null:p.id+'-'+m.dep,
+    leadDefault:m.lead, lead:m.lead, owner:p.team[m.fn]||'',
+    due:'', done:null, value:'', comment:m.comment||'', link:''
+  }));
+}
+/* Dependency-driven schedule: due = (predecessor actual completion or due, else project creation) + lead */
+const byId=(p,id)=>p.actions.find(x=>x.id===id);
+function baseDate(p,a){ if(a.dep===null) return d2s(p.created); const d=byId(p,a.dep); return d?(d.done||d.due||''):d2s(p.created); }
+function schedule(p){
+  for(let pass=0;pass<2;pass++) p.actions.forEach(a=>{ const base=baseDate(p,a); a.due=(a.lead===null||!base)?'':d2s(addDays(base,a.lead)); });
+}
+function aStatus(a){
+  if(a.done) return 'green';
+  if(!a.due) return 'gray';
+  const dl=days(TODAY,a.due);
+  if(dl<0) return 'red';
+  if(dl<=RULES.before) return 'yellow';
+  return 'gray';
+}
+const STL={green:'Complete',yellow:'Due soon',red:'Overdue',gray:'Not started'};
+const PSL={green:'Complete',yellow:'At risk',red:'Overdue',gray:'On track'};
+const stLabel=a=>a.done?'Complete':!a.due?'No due date':STL[aStatus(a)];
+function summary(p){
+  const s={green:0,yellow:0,red:0,gray:0};
+  p.actions.forEach(a=>s[aStatus(a)]++);
+  const total=p.actions.length, pct=Math.round(100*s.green/total);
+  const open=p.actions.filter(a=>!a.done);
+  let phase=5; for(let i=0;i<6;i++){ if(p.actions.some(a=>a.ph===i&&!a.done)){phase=i;break;} }
+  const next=open.filter(a=>a.due).sort((a,b)=>a.due<b.due?-1:1)[0];
+  const overall = s.red>0?'red':(s.yellow>0?'yellow':(pct===100?'green':'gray'));
+  const dues=p.actions.map(a=>a.done||a.due).filter(Boolean).sort();
+  const target=dues.length?dues[dues.length-1]:d2s(p.created);
+  const leadTotal=days(d2s(p.created),target);
+  const undated=p.actions.filter(a=>!a.done&&!a.due).length;
+  const adjusted=p.actions.filter(a=>a.lead!==a.leadDefault).length;
+  return {...s,total,pct,phase,next,overall,open:open.length,target,leadTotal,undated,adjusted};
+}
+function phaseStatus(p,i){
+  const acts=p.actions.filter(a=>a.ph===i);
+  if(!acts.length) return i===0?'green':'gray';
+  if(acts.every(a=>a.done)) return 'green';
+  if(acts.some(a=>aStatus(a)==='red')) return 'red';
+  if(acts.some(a=>aStatus(a)==='yellow')) return 'yellow';
+  return 'gray';
+}
+const stTag=(s,lbl)=>`<span class="st ${s}"><i class="dot ${s}" style="margin:0"></i>${lbl||STL[s]}</span>`;
+const railHtml=(p,cur)=>`<div class="rail6" title="${PHASES.map((n,i)=>n+': '+PSL[phaseStatus(p,i)]).join(' | ')}">${PHASES.map((_,i)=>`<i class="${phaseStatus(p,i)} ${i===cur?'current':''}"></i>`).join('')}</div>`;
+
+/* ---------- seed data ---------- */
+let projects=[];
+function seed(){
+  const mk=(id,pn,desc,plant,bu,reason,cur,nw,po,tag,cav,created,team,doneIdx,adjust)=>{
+    const p={id,pn,desc,plant,bu,reason,cur,nw,po,tag,cav,created:new Date(created),team,owner:team['BU Buyer'],tooOwner:'ZF Lifetec',saving:{'TR-2026-014':'','TR-2026-019':'42000','TR-2026-021':'','TR-2026-023':'118000','TR-2026-027':'65000','TR-2025-088':''}[id]||'',oem:{'TR-2026-014':'BMW','TR-2026-019':'Geely','TR-2026-021':'GM','TR-2026-023':'VW','TR-2026-027':'Tata','TR-2025-088':'Stellantis'}[id]||'',tech:{'TR-2026-014':'Stamping','TR-2026-019':'Die casting','TR-2026-021':'Tube forming','TR-2026-023':'Injection moulding','TR-2026-027':'Die casting','TR-2025-088':'Stamping'}[id]||''};
+    p.actions=buildActions(p);
+    (adjust||[]).forEach(([i,l])=>p.actions[i].lead=l);
+    schedule(p);
+    doneIdx.forEach(i=>{const a=p.actions[i];a.done=d2s(addDays(a.due||p.created,-2));a.value=a.input==='Date'?fmt(a.done):a.input.includes('/')?a.input.split(' / ')[0]:a.tab.split(' ')[0]+'-'+id.slice(-3)+'-'+i;});
+    schedule(p);
+    return p;
+  };
+  const T=(b,s,pm,e,sp,q)=>({'BU Buyer':b,'SDE':s,'PM':pm,'ENG':e,'SP/BU':sp,'Accounting':'Julia Lang'});
+  projects=[
+    mk('TR-2026-014','55A-108-311','Inflator housing, driver','Aschau','Airbag','Supplier exit','Metalix Kft','Präzitec GmbH','4500881234','T-14-8827',4,'2026-03-02',T('Marta Kowalski','Ines Bauer','Sofia Rossi','Ken Tanaka','Luis Ortega','Anna Novak'),[0,1,2,3,4,5,6,7,8,9,10,11,12,13,16,17,18],[[9,14],[10,21],[11,120],[12,14],[13,60],[14,200],[15,30],[16,14],[17,90],[18,150]]),
+    mk('TR-2026-019','88B-220-077','Retractor frame, RH','Suzhou','Seatbelt','Capacity increase','Suzhou Jinli','Ningbo Fortune','4500884411','T-19-1102',2,'2026-05-11',T('Carrie Chen','Daniel Wu','Tom Becker','Priya Nair','Luis Ortega','Anna Novak'),[0,1,2,3,4,5,7,8,9,10,12,16],[[9,14],[10,21],[12,14],[16,14],[18,150]]),
+    mk('TR-2026-021','71C-014-905','Pretensioner tube','Querétaro','Seatbelt','Tool end of life','Tubos MX','Tubos MX','4500885502','T-21-0331',1,'2026-06-01',T('Rahul Iyer','Daniel Wu','Sofia Rossi','Ken Tanaka','Luis Ortega','Anna Novak'),[0,1,2,4,5,6,7,8,12,16],[[9,14],[12,14],[16,14]]),
+    mk('TR-2026-023','55A-330-118','Airbag cover, passenger','Aschau','Airbag','Cost reduction','Kunststoff Nord','PolyForm SK','4500886120','T-23-4419',8,'2026-07-06',T('Carrie Chen','Ines Bauer','Tom Becker','Priya Nair','Luis Ortega','Anna Novak'),[0,1,2,3,4,5,7,8],[]),
+    mk('TR-2026-027','88B-118-402','Buckle housing','Pune','Seatbelt','Localization','Präzitec GmbH','Pune Diecast','4500887788','T-27-2209',4,'2026-08-24',T('Rahul Iyer','Daniel Wu','Sofia Rossi','Ken Tanaka','Luis Ortega','Anna Novak'),[0,1,2,3,4,5,7,8],[]),
+    mk('TR-2025-088','55A-041-660','Gas generator bracket','Aschau','Airbag','Quality issue','Stanz AG','Präzitec GmbH','4500870021','T-88-9911',2,'2025-12-08',T('Marta Kowalski','Ines Bauer','Tom Becker','Ken Tanaka','Luis Ortega','Anna Novak'),[...Array(MATRIX.length).keys()],[[9,14],[10,21],[11,120],[12,14],[13,60],[15,30],[16,14],[17,90],[18,150]]),
+  ];
+  // keep the demo close to today
+  projects[1].actions[6].lead=days(projects[1].created,addDays(TODAY,3)); schedule(projects[1]);
+  projects[3].actions[6].lead=days(projects[3].created,addDays(TODAY,10)); schedule(projects[3]);
+  const seedItem=(p,o)=>{const a={id:p.id+'-c'+(++CUSTOM_SEQ),...o,leadDefault:o.lead,due:'',done:null,value:'',link:'',custom:true,creator:o.owner,createdOn:'2026-09-09'};let at=p.actions.length;for(let i=p.actions.length-1;i>=0;i--){if(p.actions[i].ph<=a.ph){at=i+1;break;}}p.actions.splice(at,0,a);schedule(p);};
+  seedItem(projects[0],{ph:2,tab:'Windchill access',act:'Get Windchill access for new supplier so CVS CR can be raised',input:'Confirmation',fn:'ENG',owner:'Ken Tanaka',lead:days(projects[0].created,addDays(TODAY,4)),dep:null,comment:'Blocking CVS CR'});
+  seedItem(projects[2],{ph:1,tab:'FOT slip',act:'Supplier to confirm 2-week FOT slip and new date',input:'Date',fn:'SDE',owner:'Daniel Wu',lead:days(projects[2].created,addDays(TODAY,2)),dep:null,comment:'Raised in supplier call 09 Sep'});
+}
+if(!loadAutosave()) seed();
+
+/* ---------- state ---------- */
+let view='portfolio', current=null, me='Carrie Chen', EDIT=false;
+let F={q:'',owner:'',bu:'',plant:'',supplier:'',fn:'',member:'',phase:'',status:'',from:'',to:'',overdue:false};
+
+/* ---------- render ---------- */
+let DL_SEQ=0;
+function enhanceSelects(root){
+  root.querySelectorAll('select:not([data-plain]):not([data-enhanced])').forEach(sel=>{
+    if(sel.options.length<=3) return;
+    sel.dataset.enhanced='1'; const id='dl'+(++DL_SEQ);
+    const inp=document.createElement('input'); inp.setAttribute('list',id); inp.className=sel.className; inp.style.cssText=sel.style.cssText||'border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;font-size:13px;min-width:120px';
+    const cur=sel.options[sel.selectedIndex]; inp.value=(cur&&cur.value!=='')?cur.textContent:''; inp.placeholder=(sel.options[0]&&sel.options[0].value==='')?sel.options[0].textContent:'Type to search…';
+    const dl=document.createElement('datalist'); dl.id=id; [...sel.options].forEach(o=>{if(o.value==='')return;const x=document.createElement('option');x.value=o.textContent;dl.appendChild(x)});
+    const apply=()=>{const m=[...sel.options].find(o=>o.textContent===inp.value)||(inp.value===''?sel.options[0]:null); if(!m){inp.style.borderColor='var(--r)';return;} inp.style.borderColor=''; if(sel.value!==m.value){sel.value=m.value;sel.dispatchEvent(new Event('change'));}};
+    inp.addEventListener('change',apply); inp.addEventListener('focus',()=>{inp.dataset.prev=inp.value;inp.value='';}); inp.addEventListener('blur',()=>{if(inp.value==='')inp.value=inp.dataset.prev||'';});
+    sel.style.display='none'; sel.after(inp); inp.after(dl);
+  });
+}
+function render(){
+  document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.v===view));
+  document.getElementById('todayLbl').textContent=fmt(d2s(TODAY));
+  document.getElementById('pillMine').textContent=myActions().filter(a=>!a.a.done).length;
+  document.getElementById('pillMail').textContent=remindersOn(TODAY).length;
+  const m=document.getElementById('main');
+  m.innerHTML = view==='portfolio'?rPortfolio():view==='project'?rProject():view==='mine'?rMine():view==='mgmt'?rMgmt():view==='admin'?rAdmin():rSettings();
+  enhanceSelects(m); autosave();
+}
+function allPeople(){return [...new Set(Object.values(PEOPLE).flat())]}
+
+function filterBar(showActionFilters){
+  const uniq=k=>[...new Set(projects.map(p=>p[k]))];
+  return `<div class="filters">
+   <input placeholder="Project / part no." value="${F.q}" oninput="F.q=this.value;render()">
+   <select onchange="F.owner=this.value;render()"><option value="">Project owner</option>${allPeople().map(x=>`<option ${x===F.owner?'selected':''}>${x}</option>`).join('')}</select>
+   <select onchange="F.bu=this.value;render()"><option value="">BU</option>${uniq('bu').map(x=>`<option ${x===F.bu?'selected':''}>${x}</option>`).join('')}</select>
+   <select onchange="F.plant=this.value;render()"><option value="">Plant</option>${uniq('plant').map(x=>`<option ${x===F.plant?'selected':''}>${x}</option>`).join('')}</select>
+   <select onchange="F.supplier=this.value;render()"><option value="">Supplier</option>${[...new Set(projects.flatMap(p=>[p.cur,p.nw]))].map(x=>`<option ${x===F.supplier?'selected':''}>${x}</option>`).join('')}</select>
+   <select onchange="F.phase=this.value;render()"><option value="">Phase</option>${PHASES.map((x,i)=>`<option value="${i}" ${String(i)===F.phase?'selected':''}>${x}</option>`).join('')}</select>
+   <select onchange="F.status=this.value;render()"><option value="">Status</option>${['green','yellow','red','gray'].map(x=>`<option value="${x}" ${x===F.status?'selected':''}>${PSL[x]}</option>`).join('')}</select>
+   ${showActionFilters?`<select onchange="F.fn=this.value;render()"><option value="">Function</option>${FUNCTIONS.map(x=>`<option ${x===F.fn?'selected':''}>${x}</option>`).join('')}</select>
+   <select onchange="F.member=this.value;render()"><option value="">Team member</option>${allPeople().map(x=>`<option ${x===F.member?'selected':''}>${x}</option>`).join('')}</select>
+   <input type="date" value="${F.from}" onchange="F.from=this.value;render()" title="Due from"><input type="date" value="${F.to}" onchange="F.to=this.value;render()" title="Due to">`:''}
+   <button class="chip ${F.overdue?'on':''}" onclick="F.overdue=!F.overdue;render()">Overdue only</button>
+   <button class="clear" onclick="F={q:'',owner:'',bu:'',plant:'',supplier:'',fn:'',member:'',phase:'',status:'',from:'',to:'',overdue:false};render()">Clear</button>
+  </div>`;
+}
+function filteredProjects(){
+  return projects.filter(p=>{
+    const s=summary(p);
+    if(F.q && !(p.id+p.pn+p.desc).toLowerCase().includes(F.q.toLowerCase())) return false;
+    if(F.owner && p.owner!==F.owner) return false;
+    if(F.bu && p.bu!==F.bu) return false;
+    if(F.plant && p.plant!==F.plant) return false;
+    if(F.supplier && p.cur!==F.supplier && p.nw!==F.supplier) return false;
+    if(F.phase!=='' && s.phase!==Number(F.phase)) return false;
+    if(F.status && s.overall!==F.status) return false;
+    if(F.member && !Object.values(p.team).includes(F.member)) return false;
+    if(F.fn && !p.actions.some(a=>a.fn===F.fn&&!a.done)) return false;
+    if(F.overdue && s.red===0) return false;
+    return true;
+  });
+}
+function actionPass(a){
+  if(F.fn && a.fn!==F.fn) return false;
+  if(F.member && a.owner!==F.member) return false;
+  if(F.from && a.due<F.from) return false;
+  if(F.to && a.due>F.to) return false;
+  if(F.overdue && aStatus(a)!=='red') return false;
+  if(F.status && aStatus(a)!==F.status) return false;
+  if(F.phase!=='' && a.ph!==Number(F.phase)) return false;
+  return true;
+}
+
+/* Portfolio */
+function rPortfolio(){
+  const list=filteredProjects();
+  const rows=list.map(p=>{const s=summary(p);return `<tr class="row" onclick="openProject('${p.id}')">
+   <td><b>${p.id}</b><br><span class="muted">${p.pn} · ${p.desc}</span></td>
+   <td>${p.plant}<br><span class="muted">${p.bu}</span></td>
+   <td>${railHtml(p,s.phase)}<div class="hint" style="margin-top:7px">${PHASES[s.phase]}</div></td>
+   <td>${stTag(s.overall,PSL[s.overall])}</td>
+   <td><span class="pct"><span class="bar"><i style="width:${s.pct}%"></i></span>${s.pct}%</span></td>
+   <td>${p.owner}</td>
+   <td class="num">${s.leadTotal} d${s.adjusted?`<br><span class="adj hint">${s.adjusted} adjusted</span>`:''}</td>
+   <td>${fmt(s.target)}${s.undated?`<br><span class="hint">${s.undated} undated</span>`:''}</td>
+   <td>${s.next?`${s.next.tab}<br><span class="muted">${fmt(s.next.due)}</span>`:'<span class="muted">—</span>'}</td>
+   <td class="num">${s.red?`<span class="st red">${s.red}</span>`:'<span class="muted">0</span>'}</td>
+   ${isAdmin(me)?`<td><button class="link" style="font-size:12px;color:var(--r)" onclick="event.stopPropagation();deleteProject('${p.id}')">delete</button></td>`:''}</tr>`}).join('');
+  return `<div class="head"><div><h1>Project portfolio</h1><div class="sub">${list.length} of ${projects.length} projects · phase rail shows the six phases from the process sheet, marker under the current one</div></div><div style="display:flex;gap:8px"><button class="btn secondary" onclick="downloadTemplate()">Import template</button><label class="btn secondary" style="cursor:pointer">⬆ Upload Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this.files[0]);this.value=''"></label><button class="btn secondary" onclick="exportPortfolio()">⬇ Export to Excel</button></div></div>
+  ${filterBar(false)}
+  <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Project</th><th>Plant / BU</th><th>Phase</th><th>Status</th><th>Complete</th><th>Project owner</th><th class="num">Lead time</th><th>Projected completion</th><th>Next milestone</th><th class="num">Overdue</th>${isAdmin(me)?'<th></th>':''}</tr></thead>
+  <tbody>${rows||`<tr><td colspan="11" class="empty">No projects match these filters.</td></tr>`}</tbody></table></div>
+  <div class="hint" style="margin-top:8px">Upload accepts the same layout as the export (one row per replacement tool, headers in row 1 — use "Import template" for a blank file). Rows with a Project ID that already exists are updated, others are created. Deleting a project is limited to dashboard admins (Admin · People).</div>`;
+}
+
+/* Project */
+function openProject(id){current=projects.find(p=>p.id===id);EDIT=false;view='project';render();window.scrollTo(0,0)}
+function saveEdit(){
+  const p=current, g=id=>{const e=document.getElementById(id);return e?e.value.trim():undefined;};
+  INIT_FIELDS.forEach(([k])=>{const v=g('ed_'+k); if(v!==undefined) p[k]=v;}); const bu=g('ed_bu'); if(bu!==undefined) p.bu=bu;
+  const changes=[]; [[INITIATOR_FN,'BU Buyer (Initiator)'],...TEAM_ROWS].forEach(([f,l])=>{const v=g('edt_'+f.replace(/[^a-z]/gi,'')); if(v===undefined) return; if(v!==(p.team[f]||'')){ if(v) p.team[f]=v; else delete p.team[f]; p.actions.forEach(a=>{if(a.fn===f&&!a.done)a.owner=v;}); changes.push(`${l} → ${v||'unassigned'}`);} });
+  if(p.team[INITIATOR_FN]) p.owner=p.team[INITIATOR_FN];
+  const missing=REQUIRED_TEAM.filter(f=>!p.team[f]); EDIT=false; render();
+  toast(`Project updated${changes.length?' · '+changes.join(', ')+' · assignment emails queued':''}${missing.length?' · still missing: '+missing.join(', '):''}`);
+}
+function rProject(){
+  const p=current,s=summary(p);
+  const flags=p.actions.filter(a=>aStatus(a)==='red').sort((a,b)=>a.due<b.due?-1:1);
+  const first=new Date(p.created),last=new Date(s.target),span=Math.max(1,last-first);
+  const pos=d=>Math.min(100,Math.max(0,100*(new Date(d)-first)/span));
+  const ms=[1,2,3,4,5].map(i=>{const acts=p.actions.filter(x=>x.ph===i).map(x=>x.done||x.due).filter(Boolean).sort();return {n:PHASES[i].slice(3),d:acts.length?acts[acts.length-1]:d2s(p.created),st:phaseStatus(p,i)}});
+  const rows=p.actions.map((a,i)=>{const st=aStatus(a);const adj=a.lead!==a.leadDefault;return (a.ph!==(p.actions[i-1]||{}).ph?`<tr><td colspan="11" style="padding:0"><div class="phasehead">${PHASES[a.ph]}${stTag(phaseStatus(p,a.ph),PSL[phaseStatus(p,a.ph)])}<span class="meta"><span>${p.actions.filter(x=>x.ph===a.ph&&x.done).length}/${p.actions.filter(x=>x.ph===a.ph).length} done</span><button class="btn secondary sm" onclick="openAddAction(${a.ph})">+ Add item</button></span></div></td></tr>`:'')+
+   `<tr><td><b>${a.tab}</b> · ${a.act}<br><span class="muted">${a.input}</span>${a.dep!==null&&byId(p,a.dep)?`<br><span class="hint">after ${byId(p,a.dep).tab}</span>`:''}${a.custom?`<br><span class="hint adj">added by ${a.creator||'—'}${a.createdOn?' on '+fmt(a.createdOn):''}</span>${(a.creator===me||isAdmin(me))?` · <button class="link" style="font-size:12px;color:var(--r)" onclick="deleteAction('${a.id}')">delete</button>`:''}`:''}</td>
+    <td>${inputField(i,a)}</td><td>${a.fn}</td><td>${a.owner}<br><span class="muted">${email(a.owner)}</span></td>
+    <td class="num">${a.leadDefault===null?'<span class="hint">none in sheet</span>':a.leadDefault+' d'}</td>
+    <td class="num"><input class="leadin" type="number" min="0" value="${a.lead===null?'':a.lead}" ${a.done?'disabled':''} onchange="setLead(${i},this.value)" style="${a.lead===null?'border-color:var(--r)':''}"> d${adj&&a.lead!==null?'<div class="adj hint">adjusted</div>':''}</td>
+    <td><input type="date" value="${a.due}" ${a.done?'disabled':''} onchange="setDueDate(${i},this.value)" style="border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px;${!a.due?'border-color:var(--r)':''}"></td>
+    <td>${a.done?fmt(a.done):'<span class="muted">—</span>'}</td><td>${stTag(st,stLabel(a))}</td>
+    <td><input value="${(a.comment||'').replace(/"/g,'&quot;')}" placeholder="Comment" onchange="setComment(${i},this.value)" style="width:150px;border:1px solid var(--line);border-radius:4px;padding:3px 6px;font-size:12px">${a.link?' <a href="#">doc</a>':''}</td>
+    <td style="white-space:nowrap">${a.done?'':`<button class="btn sm" onclick="openAction('${a.id}')">Complete</button> <button class="btn secondary sm" title="Send a reminder to ${a.owner} now" onclick="openRemind('${a.id}')">Remind</button>`}${a.lastRemind?`<div class="hint">reminded ${fmt(a.lastRemind)}</div>`:''}</td></tr>`}).join('');
+  return `<button class="link" onclick="view='portfolio';render()">← Portfolio</button>
+  <div class="head" style="margin-top:8px"><div><h1>${p.id} · ${p.desc}</h1><div class="sub">${p.pn} · ${p.plant} · ${p.bu} · created ${fmt(d2s(p.created))}</div></div>
+   <div style="display:flex;gap:8px;align-items:center">${stTag(s.overall,PSL[s.overall])}<button class="btn secondary" onclick="exportProject()">⬇ Export</button><button class="btn secondary" onclick="openAddAction(${s.phase})">+ Add item</button>${s.red?`<button class="btn" style="background:var(--r)" onclick="remindAllOverdue()">Remind all overdue (${s.red})</button>`:''}</div></div>
+  <div class="grid c4" style="margin-bottom:14px">
+   <div class="card kpi b"><b>${s.pct}%</b><span>complete · ${s.green} done · ${s.open} open</span></div>
+   <div class="card kpi"><b>${PHASES[s.phase].slice(3)}</b><span>current phase</span></div>
+   <div class="card kpi ${s.adjusted?'y':''}"><b>${s.leadTotal} d</b><span>overall lead time → ${fmt(s.target)}${s.adjusted?` · ${s.adjusted} timing${s.adjusted>1?'s':''} adjusted`:''}${s.undated?` · ${s.undated} without due date`:''}</span></div>
+   <div class="card kpi r"><b>${s.red}</b><span>overdue${s.next?` · next: ${s.next.tab} ${fmt(s.next.due)}`:''}</span></div>
+  </div>
+  <div class="grid c2" style="margin-bottom:14px">
+   <div class="card"><h2>Timeline</h2>
+    <div class="timeline"><div class="track"></div><div class="today" style="left:${pos(TODAY)}%"><span>today</span></div>
+    ${ms.map(m=>`<div class="ms" style="left:calc(${pos(m.d)}% - 7px);background:var(--${m.st==='gray'?'gr':m.st})"><span>${m.n}</span></div>`).join('')}</div>
+    <div class="hint" style="margin-top:14px">Phase end milestones · ${fmt(d2s(p.created))} → projected ${fmt(s.target)}</div></div>
+   <div class="card"><h2>Red flags</h2>${flags.length?`<ul class="flags">${flags.map(a=>`<li><i class="dot red"></i><b>${-days(TODAY,a.due)} d late</b> — ${a.tab} · ${a.act} <span class="muted">(${a.owner})</span></li>`).join('')}</ul>`:'<div class="muted">No overdue actions.</div>'}
+    ${s.undated?`<div class="hint" style="margin-top:8px">${s.undated} open action${s.undated>1?'s have':' has'} no due date — enter a lead time in the action plan so reminders can start.</div>`:''}</div>
+  </div>
+  <div class="phasehead">1. Tool Creation ${stTag('green','Complete')}<span class="meta"><span>Initiator inputs entered on ${fmt(d2s(p.created))}</span>${EDIT?`<button class="btn sm" onclick="saveEdit()">Save</button><button class="btn secondary sm" onclick="EDIT=false;render()">Cancel</button>`:`<button class="btn secondary sm" onclick="EDIT=true;render()">Edit</button>`}</span></div>
+  <div class="card" style="margin-bottom:6px">${EDIT?`<div class="masters">${INIT_FIELDS.map(([k,l])=>`<div><span>${l}</span><input id="ed_${k}" value="${String(p[k]||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px"></div>`).join('')}<div><span>BU (business unit)</span><input id="ed_bu" value="${p.bu||''}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px"></div></div>
+   <div class="team" style="margin-top:12px"><div><span>BU Buyer (Initiator)</span><select id="edt_${INITIATOR_FN.replace(/[^a-z]/gi,'')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px"><option value="">Assign</option>${(PEOPLE[INITIATOR_FN]||[]).map(n=>`<option ${p.team[INITIATOR_FN]===n?'selected':''}>${n}</option>`).join('')}</select></div>${TEAM_ROWS.map(([f,l])=>`<div><span>${l}${REQUIRED_TEAM.includes(f)?' <span class="req">*</span>':''}</span><select id="edt_${f.replace(/[^a-z]/gi,'')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px"><option value="">Assign</option>${(PEOPLE[f]||[]).map(n=>`<option ${p.team[f]===n?'selected':''}>${n}</option>`).join('')}</select></div>`).join('')}</div>
+   <div class="hint" style="margin-top:8px">Changing a team member reassigns all of that function's open actions to the new person (completed actions keep their original owner).</div>`
+  :`<div class="masters">${INIT_FIELDS.map(([k,l])=>`<div><span>${l}</span>${p[k]||'<span class="muted">—</span>'}</div>`).join('')}</div>
+   <div class="team" style="margin-top:12px"><div><span>BU Buyer (Initiator)</span>${p.team['BU Buyer']}<br><span>${email(p.team['BU Buyer'])}</span></div>${TEAM_ROWS.map(([f,l])=>`<div><span>${l}</span>${p.team[f]||'<span class="req">not assigned</span>'}<br><span>${email(p.team[f])}</span></div>`).join('')}</div>`}</div>
+  <div class="card" style="padding:0 0 4px;overflow:auto"><table><thead><tr><th>Tab · Action</th><th>Required input</th><th>Function</th><th>Owner</th><th class="num">Default</th><th class="num">Adjusted</th><th>Due</th><th>Completed</th><th>Status</th><th>Comment</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="hint" style="margin-top:14px">Anything else worth tracking on this project — a blocker, a supplier follow-up, a decision — is added as an item to the relevant step with "+ Add item", so it gets an owner, a due date and reminders like every other action.</div>`;
+}
+function insertAction(o){
+  const a={id:current.id+'-c'+(++CUSTOM_SEQ),...o,leadDefault:o.lead,due:'',done:null,value:'',link:'',custom:true,creator:me,createdOn:d2s(TODAY)};
+  let at=current.actions.length; for(let i=current.actions.length-1;i>=0;i--){ if(current.actions[i].ph<=a.ph){at=i+1;break;} }
+  current.actions.splice(at,0,a); schedule(current); render(); return a;
+}
+function inputField(i,a){
+  const st='border:1px solid var(--line);border-radius:4px;padding:4px 6px;font-size:12px;width:150px;'+(a.value?'background:var(--g-soft);border-color:var(--g);font-weight:600':'');
+  if(a.input.includes(' / ')) return `<select onchange="setValue(${i},this.value)" style="${st}"><option value="">${a.input}</option>${a.input.split(' / ').map(o=>`<option ${a.value===o?'selected':''}>${o}</option>`).join('')}</select>`;
+  const isDate=/date/i.test(a.input);
+  return `<input type="${isDate?'date':'text'}" value="${(a.value||'').replace(/"/g,'&quot;')}" placeholder="${a.input}" onchange="setValue(${i},this.value)" style="${st}">`;
+}
+function setValue(i,val){
+  const a=current.actions[i]; a.value=val.trim();
+  if(a.value&&!a.done){a.done=d2s(TODAY);schedule(current);render();toast(`${a.tab} completed — ${a.input} recorded, reminders stopped`);}
+  else if(!a.value&&a.done){a.done=null;schedule(current);render();toast(`${a.tab} reopened`);}
+  else render();
+}
+function deleteAction(id){
+  const a=byId(current,id); if(!a||!a.custom){toast('Standard template actions cannot be deleted');return;}
+  if(!(a.creator===me||isAdmin(me))){toast('Only the creator or a dashboard admin can delete this item');return;}
+  if(!confirm(`Delete "${a.tab}" from ${current.id}? This cannot be undone.`)) return;
+  current.actions=current.actions.filter(x=>x.id!==id); current.actions.forEach(x=>{if(x.dep===id)x.dep=null;}); schedule(current); render(); toast(`"${a.tab}" deleted`);
+}
+function setComment(i,val){current.actions[i].comment=val;toast('Comment saved')}
+function setLead(i,val){
+  const a=current.actions[i]; const before=summary(current).target;
+  a.lead=val===''?null:Math.max(0,+val); schedule(current); render();
+  const after=summary(current).target; const dep=current.actions.filter(x=>x.dep===a.id&&!x.done).length;
+  toast(`${a.tab} lead time ${a.lead===null?'cleared':'set to '+a.lead+' d'}${dep?` · ${dep} dependent date${dep>1?'s':''} moved`:''}${before!==after?` · projected completion ${fmt(after)}`:''}`);
+}
+function setDueDate(i,val){
+  const a=current.actions[i]; if(!val) return;
+  const base=baseDate(current,a);
+  if(!base){toast('Set the predecessor date first');return;}
+  setLead(i,days(base,val));
+}
+
+/* My actions */
+function myActions(){return projects.flatMap(p=>p.actions.filter(a=>a.owner===me).map(a=>({p,a})))}
+function rMine(){
+  const list=myActions().filter(x=>actionPass(x.a)).sort((x,y)=>(x.a.done?1:0)-(y.a.done?1:0)||((x.a.due||'9')<(y.a.due||'9')?-1:1));
+  const openN=list.filter(x=>!x.a.done).length;
+  return `<div class="head"><div><h1>My actions</h1><div class="sub">${me} · ${openN} open · ${list.filter(x=>aStatus(x.a)==='red').length} overdue</div></div></div>
+  ${filterBar(true)}
+  <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Project</th><th>Required action</th><th>Required input</th><th>Due</th><th>Status</th><th class="num">Days</th><th></th></tr></thead><tbody>
+  ${list.map(({p,a})=>{const st=aStatus(a),dl=a.due?days(TODAY,a.due):0;return `<tr><td><b>${p.id}</b><br><span class="muted">${p.desc}</span></td><td><b>${a.tab}</b> · ${a.act}<br><span class="muted">${PHASES[a.ph]}</span></td><td>${a.value?'<b>'+a.value+'</b>':a.input}</td><td>${a.due?fmt(a.due):'<span class="hint">not scheduled</span>'}${!a.done&&a.due?`<div class="hint">next reminder ${nextReminder(a)}</div>`:''}</td><td>${stTag(st,stLabel(a))}</td>
+   <td class="num" style="color:${a.due&&dl<0?'var(--r)':'inherit'}">${a.done||!a.due?'—':dl<0?`${-dl} overdue`:`${dl} left`}</td><td>${a.done?'':`<button class="btn sm" onclick="openAction('${a.id}')">Enter &amp; complete</button>`}</td></tr>`}).join('')||`<tr><td colspan="7" class="empty">Nothing assigned to you.</td></tr>`}</tbody></table></div>`;
+}
+
+/* Management */
+function rMgmt(){
+  const list=filteredProjects();
+  const S=list.map(p=>({p,s:summary(p)}));
+  const active=S.filter(x=>x.s.pct<100);
+  const cnt=k=>active.filter(x=>x.s.overall===k).length;
+  const byProj=S.filter(x=>x.s.red).sort((a,b)=>b.s.red-a.s.red);
+  const agg=key=>{const m={};list.forEach(p=>p.actions.forEach(a=>{if(aStatus(a)==='red')m[a[key]]=(m[a[key]]||0)+1}));return Object.entries(m).sort((a,b)=>b[1]-a[1])};
+  const byFn=agg('fn'),byOwner=agg('owner');
+  const byPhase=PHASES.slice(1).map((n,j)=>{const i=j+1;return [n,list.reduce((c,p)=>c+p.actions.filter(a=>a.ph===i&&aStatus(a)==='red').length,0),S.filter(x=>x.s.phase===i&&x.s.pct<100).length]});
+  const max=Math.max(1,...byFn.map(x=>x[1]),...byOwner.map(x=>x[1]),...byProj.map(x=>x.s.red),...byPhase.map(x=>x[1]));
+  const hb=(l,n,sub)=>`<div class="hbar"><span>${l}${sub?`<br><span class="hint">${sub}</span>`:''}</span><span class="b" style="width:${100*n/max}%"></span><span class="n">${n}</span></div>`;
+  return `<div class="head"><div><h1>Management view</h1><div class="sub">Where the portfolio is stuck, by project, function, owner and phase</div></div></div>
+  ${filterBar(false)}
+  <div class="grid c4" style="margin-bottom:14px">
+   <div class="card kpi b"><b>${active.length}</b><span>active projects</span></div>
+   <div class="card kpi g"><b>${cnt('green')+cnt('gray')}</b><span>on track</span></div>
+   <div class="card kpi y"><b>${cnt('yellow')}</b><span>at risk (due within ${RULES.before} d)</span></div>
+   <div class="card kpi r"><b>${cnt('red')}</b><span>overdue projects</span></div>
+  </div>
+  <div class="grid c2">
+   <div class="card"><h2>Overdue actions by project</h2>${byProj.map(x=>hb(x.p.id,x.s.red,x.p.desc)).join('')||'<div class="muted">None</div>'}</div>
+   <div class="card"><h2>Overdue actions by function</h2>${byFn.map(x=>hb(x[0],x[1])).join('')||'<div class="muted">None</div>'}</div>
+   <div class="card"><h2>Overdue actions by owner</h2>${byOwner.map(x=>hb(x[0],x[1],email(x[0]))).join('')||'<div class="muted">None</div>'}</div>
+   <div class="card"><h2>Bottlenecks by phase</h2>${byPhase.map(x=>hb(x[0],x[1],`${x[2]} project${x[2]===1?'':'s'} currently in phase`)).join('')}</div>
+  </div>`;
+}
+
+/* Reminder engine: what the daily job would send on a given date */
+function remindersOn(date){
+  const mails=[];
+  projects.forEach(p=>p.actions.forEach(a=>{
+    if(a.done||!a.due) return; const dl=days(date,a.due);
+    if(dl===RULES.before) mails.push({k:'due',to:a.owner,cc:'',a,p,s:`Reminder: ${a.tab} · ${a.act} is due in ${RULES.before} days (${p.id})`});
+    else if(dl===0) mails.push({k:'due',to:a.owner,cc:'',a,p,s:`Due today: ${a.tab} · ${a.act} (${p.id})`});
+    else if(dl<0 && (-dl)%RULES.overdueEvery===0){const esc=-dl>=RULES.escalateAfter;mails.push({k:esc?'esc':'due',to:a.owner,cc:esc?p.owner:'',a,p,s:`${esc?'ESCALATION':'Overdue'}: ${a.tab} · ${a.act} is ${-dl} days late (${p.id})`});}
+  }));
+  return mails;
+}
+function nextReminder(a){
+  if(a.done||!a.due) return '';
+  const dl=days(TODAY,a.due);
+  if(dl>RULES.before) return `${fmt(d2s(addDays(a.due,-RULES.before)))} (${RULES.before} d before due)`;
+  if(dl>0) return `${fmt(a.due)} (on due date)`;
+  const n=RULES.overdueEvery-((-dl)%RULES.overdueEvery); const d=d2s(addDays(TODAY,n===RULES.overdueEvery?0:n));
+  return `${fmt(d)} (overdue, every ${RULES.overdueEvery} d${-dl+ (n===RULES.overdueEvery?0:n)>=RULES.escalateAfter?', cc project owner':''})`;
+}
+function rSettings(){
+  const mails=remindersOn(TODAY);
+  const sched=a=>a.done?'':`<div class="hint" style="margin-top:3px">next: ${nextReminder(a)}</div>`;
+  return `<div class="head"><div><h1>Reminders &amp; escalation rules</h1><div class="sub">Rules apply to every project. Reminders keep going until the action is marked complete.</div></div></div>
+  <div class="grid c2">
+   <div class="card"><h2>Rules</h2>
+    <div class="rule"><span>Send "assigned" email to each owner when the action plan is generated</span><span class="muted">always</span></div>
+    <div class="rule"><span>First reminder before the due date <span class="hint">(also drives the yellow "due soon" status)</span></span><span><input type="number" value="${RULES.before}" onchange="RULES.before=+this.value;render()"> d</span></div>
+    <div class="rule"><span>On the due date if still incomplete</span><span class="muted">always</span></div>
+    <div class="rule"><span>Repeat overdue reminder every</span><span><input type="number" value="${RULES.overdueEvery}" onchange="RULES.overdueEvery=+this.value;render()"> d</span></div>
+    <div class="rule"><span>Copy project owner (escalation) once overdue by</span><span><input type="number" value="${RULES.escalateAfter}" onchange="RULES.escalateAfter=+this.value;render()"> d</span></div>
+    <div class="rule"><span>Channel <span class="hint">(Outlook mail to the owner's address, Teams chat via the Flow bot, or both)</span></span><span><select data-plain onchange="RULES.channel=this.value;render()" style="border:1px solid var(--line);border-radius:4px;padding:4px">${Object.entries(CH).map(([k,v])=>`<option value="${k}" ${RULES.channel===k?'selected':''}>${v}</option>`).join('')}</select></span></div>
+    <div class="note" style="margin-top:14px">How it runs in production: a Power Automate flow runs every morning, reads every open action, applies these rules and sends an Outlook mail and/or a Teams chat message to the owner's address; the assignment message goes out the moment a plan is generated or an item is added. Nothing is sent from this prototype — the list on the right shows exactly what today's run would send. Actions without a due date are not reminded.</div></div>
+   <div class="card"><h2>Automatic send list · ${fmt(d2s(TODAY))} · ${mails.length} message${mails.length===1?'':'s'}</h2>
+    ${mails.map(m=>`<div class="mail ${m.k}"><b>${m.s}</b><div class="to">${CH[RULES.channel]} → ${m.to} &lt;${email(m.to)}&gt;${m.cc?` · Cc: ${m.cc} (project owner)`:''}</div><div class="hint">Message contains a direct link to complete the action in My Actions.</div></div>`).join('')||'<div class="muted">No reminders fall on today\'s date with the current rules.</div>'}
+    <h2 style="margin-top:16px">Manual reminders sent today (${MANUAL.filter(m=>m.ts===d2s(TODAY)).length})</h2>
+    ${MANUAL.filter(m=>m.ts===d2s(TODAY)).map(m=>`<div class="mail assign"><b>${m.a.tab} · ${m.a.act} (${m.p.id})</b><div class="to">${CH[RULES.channel]} → ${m.to} &lt;${email(m.to)}&gt;${m.cc?` · Cc: ${m.cc}`:''} · sent by ${m.by}</div></div>`).join('')||'<div class="muted">None yet — use "Remind" on any open action in a project, or "Remind all overdue" in the project header.</div>'}
+    <h2 style="margin-top:16px">Upcoming automatic (next 7 days)</h2>
+    ${[1,2,3,4,5,6,7].map(n=>{const d=addDays(TODAY,n);const ms=remindersOn(d);return ms.length?`<div class="hbar" style="grid-template-columns:110px 1fr"><span>${fmt(d2s(d))}</span><span class="hint">${ms.length} message${ms.length===1?'':'s'} · ${ms.filter(x=>x.k==='esc').length} escalation${ms.filter(x=>x.k==='esc').length===1?'':'s'}</span></div>`:''}).join('')||'<div class="muted">Nothing scheduled.</div>'}</div>
+  </div>`;
+}
+
+/* ---------- action completion ---------- */
+let actTarget=null;
+function openAction(id){
+  for(const p of projects){const a=p.actions.find(x=>x.id===id);if(a){actTarget={p,a};break;}}
+  const {p,a}=actTarget;
+  const isChoice=a.input.includes(' / '), isDate=a.input==='Date';
+  document.getElementById('actBody').innerHTML=`<h2>${a.tab} · ${a.act}</h2><div class="sub" style="margin-bottom:14px">${p.id} · ${PHASES[a.ph]} · owner ${a.owner} · ${a.due?'due '+fmt(a.due):'no due date set'}</div>
+   <div class="field"><label>${a.input} <span class="req">*</span></label>${isChoice?`<select id="aVal"><option value="">Select</option>${a.input.split(' / ').map(o=>`<option>${o}</option>`).join('')}</select>`:`<input id="aVal" type="${isDate?'date':'text'}" placeholder="Required to close this action">`}</div>
+   <div class="f2"><div class="field"><label>Actual completion date <span class="req">*</span></label><input id="aDate" type="date" value="${d2s(TODAY)}"></div>
+   <div class="field"><label>Supporting document / link</label><input id="aLink" placeholder="SharePoint / Windchill link (optional)"></div></div>
+   <div class="field"><label>Comment</label><textarea id="aCom" rows="2"></textarea></div>
+   <div class="mfoot"><span class="hint">The action stays open until the required input is entered.</span><span><button class="btn secondary" onclick="closeM('act')">Cancel</button> <button class="btn" onclick="completeAction()">Mark complete</button></span></div>`;
+  document.getElementById('act').classList.add('open'); enhanceSelects(document.getElementById('actBody'));
+  setTimeout(()=>document.getElementById('aVal').focus(),50);
+}
+function completeAction(){
+  const el=document.getElementById('aVal'); const v=el.value.trim();
+  if(!v){el.style.borderColor='var(--r)';el.focus();return;}
+  const {p,a}=actTarget; a.value=v; a.done=document.getElementById('aDate').value; a.link=document.getElementById('aLink').value; a.comment=document.getElementById('aCom').value;
+  schedule(p); closeM('act'); render(); toast('Action completed — reminders stopped, dependent dates updated');
+}
+function closeM(id){document.getElementById(id).classList.remove('open')}
+
+/* ---------- manual reminder ---------- */
+function openRemind(id){
+  for(const p of projects){const a=p.actions.find(x=>x.id===id);if(a){actTarget={p,a};break;}}
+  const {p,a}=actTarget; const dl=a.due?days(TODAY,a.due):null;
+  const esc=dl!==null&&dl<0&&-dl>=RULES.escalateAfter;
+  document.getElementById('actBody').innerHTML=`<h2>Remind ${a.owner}</h2><div class="sub" style="margin-bottom:14px">${p.id} · ${a.tab} · ${a.act} · ${a.due?(dl<0?`<span style="color:var(--r)">${-dl} days overdue</span>`:`due ${fmt(a.due)}`):'no due date'}</div>
+   <div class="note">${CH[RULES.channel]} → ${a.owner} &lt;${email(a.owner)}&gt;${a.lastRemind?` · last manual reminder ${fmt(a.lastRemind)}`:''}</div>
+   <div class="field"><label>Message</label><textarea id="rmMsg" rows="4">Hi ${a.owner.split(' ')[0]}, quick reminder on ${p.id} (${p.desc}): "${a.act}" ${a.due?(dl<0?`was due ${fmt(a.due)}`:`is due ${fmt(a.due)}`):'has no due date yet'}. Please enter the ${a.input} in the dashboard. Thanks, ${me}</textarea></div>
+   <div class="field"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rmCc" style="width:auto" ${esc?'checked':''}> Copy project owner (${p.owner})</label></div>
+   <div class="mfoot"><span class="hint">Sent immediately, independent of the automatic schedule. Logged on the action.</span><span><button class="btn secondary" onclick="closeM('act')">Cancel</button> <button class="btn" onclick="sendRemind()">Send reminder</button></span></div>`;
+  document.getElementById('act').classList.add('open'); enhanceSelects(document.getElementById('actBody'));
+}
+function sendRemind(){
+  const {p,a}=actTarget; const cc=document.getElementById('rmCc').checked?p.owner:'';
+  logRemind(p,a,cc,document.getElementById('rmMsg').value);
+  closeM('act'); render(); toast(`Reminder sent to ${a.owner}${cc?' · cc '+cc:''} via ${CH[RULES.channel]}`);
+}
+function logRemind(p,a,cc,note){ a.lastRemind=d2s(TODAY); MANUAL.push({ts:d2s(TODAY),by:me,to:a.owner,cc,a,p,note:note||''}); }
+function remindAllOverdue(){
+  const list=current.actions.filter(a=>aStatus(a)==='red');
+  list.forEach(a=>logRemind(current,a,-days(TODAY,a.due)>=RULES.escalateAfter?current.owner:'',''));
+  const owners=[...new Set(list.map(a=>a.owner))];
+  render(); toast(`${list.length} reminder${list.length===1?'':'s'} sent to ${owners.join(', ')}`);
+}
+
+/* ---------- add item to a phase (per project, optionally to the standard template) ---------- */
+function openAddAction(ph){
+  const p=current;
+  const fnSel=`<select id="naFn" onchange="document.getElementById('naOwner').value=(current.team[this.value]||'')">${FUNCTIONS.map(f=>`<option ${f==='SP/BU'?'selected':''}>${f}</option>`).join('')}</select>`;
+  document.getElementById('actBody').innerHTML=`<h2>Add item</h2><div class="sub" style="margin-bottom:14px">${p.id} · new action added to the project's action plan</div>
+   <div class="f2"><div class="field"><label>Step / phase <span class="req">*</span></label><select id="naPh">${PHASES.map((n,i)=>`<option value="${i}" ${i===ph?'selected':''}>${n}</option>`).join('')}</select></div>
+   <div class="field"><label>Tab (short name) <span class="req">*</span></label><input id="naTab" placeholder="e.g. Tool insurance"></div></div>
+   <div class="field"><label>Action <span class="req">*</span></label><input id="naAct" placeholder="What has to be done"></div>
+   <div class="f3"><div class="field"><label>Required input</label><input id="naIn" placeholder="e.g. Date / Reference / Yes / No"></div>
+   <div class="field"><label>Function</label>${fnSel}</div>
+   <div class="field"><label>Owner</label><input id="naOwner" value="${p.team['SP/BU']||''}"></div></div>
+   <div class="f3"><div class="field"><label>Lead time (days)</label><input id="naLead" type="number" min="0" placeholder="blank = no due date"></div>
+   <div class="field"><label>Counted from</label><select id="naDep"><option value="">Project creation</option>${p.actions.map(a=>`<option value="${a.id}">${a.tab} · ${a.act.slice(0,40)}</option>`).join('')}</select></div>
+   <div class="field"><label>Comment</label><input id="naCom"></div></div>
+   <div class="field"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="naTpl" style="width:auto"> Also add to the standard template for all future projects</label></div>
+   <div class="mfoot"><span class="hint">Assignment email goes to the owner as soon as the item is added.</span><span><button class="btn secondary" onclick="closeM('act')">Cancel</button> <button class="btn" onclick="addAction()">Add item</button></span></div>`;
+  document.getElementById('act').classList.add('open'); enhanceSelects(document.getElementById('actBody'));
+  setTimeout(()=>document.getElementById('naTab').focus(),50);
+}
+function addAction(){
+  const g=id=>document.getElementById(id).value.trim();
+  const ph=+g('naPh'),tab=g('naTab'),act=g('naAct');
+  if(!tab||!act){toast('Tab and action are required');return;}
+  const lead=g('naLead')===''?null:Math.max(0,+g('naLead'));
+  const tpl=document.getElementById('naTpl').checked;
+  closeM('act');
+  const a=insertAction({ph,tab,act,input:g('naIn')||'Confirmation',fn:g('naFn'),dep:g('naDep')||null,lead,owner:g('naOwner')||current.team[g('naFn')]||'',comment:g('naCom')});
+  if(tpl){ MATRIX.push({ph,tab,act,input:a.input,fn:a.fn,lead,dep:null,comment:''}); }
+  toast(`"${tab}" added to ${PHASES[ph]}${a.owner?' · assignment email to '+a.owner:''}${tpl?' · template updated':''}`);
+}
+
+/* ---------- new project wizard: initiation → team → plan generated immediately ---------- */
+let W={step:0,d:{},team:{}};
+function openWizard(){W={step:0,d:{},team:{}};document.getElementById('wiz').classList.add('open');rWiz()}
+function rWiz(){
+  const b=document.getElementById('wizBody'); setTimeout(()=>enhanceSelects(b),0);
+  const steps=`<div class="steps">${[0,1,2].map(i=>`<span class="${i<=W.step?'done':''}"></span>`).join('')}</div>`;
+  const inp=(k,l,req,type='text')=>`<div class="field"><label>${l}${req?' <span class="req">*</span>':''}</label><input type="${type}" value="${W.d[k]||''}" oninput="W.d['${k}']=this.value"></div>`;
+  if(W.step===0) b.innerHTML=`<h2>New project · 1 of 3 · Tool Creation — Initiator inputs</h2>${steps}
+    <div class="f3">${inp('pn','Part Number',1)}${inp('desc','Part Description',1)}${inp('plant','Plant affected',1)}
+    ${inp('bu','BU (business unit)',1)}<div class="field"><label>Reason <span class="req">*</span></label><select onchange="W.d.reason=this.value"><option value="">Select</option>${['Tool end of life','Supplier exit','Capacity increase','Cost reduction','Localization','Quality issue','Engineering change'].map(r=>`<option ${W.d.reason===r?'selected':''}>${r}</option>`).join('')}</select></div>${inp('cur','Current Supplier',1)}
+    ${inp('nw','New Supplier',1)}${inp('po','Tool PO')}${inp('tag','Tool Tag')}${inp('tooOwner','Tool Owner')}${inp('cav','Cavities',0,'number')}${inp('oem','OEM')}${inp('tech','Tech')}${inp('saving','Estimated saving (€/yr)',0,'number')}
+    <div class="field"><label>Project creation date</label><input value="${fmt(d2s(TODAY))}" disabled></div></div>
+    <div class="mfoot"><span></span><span><button class="btn secondary" onclick="closeM('wiz')">Cancel</button> <button class="btn" onclick="wizNext()">Next: team</button></span></div>`;
+  if(W.step===1) b.innerHTML=`<h2>New project · 2 of 3 · Tool Creation — Team</h2>${steps}<div class="note">Assigning a person to a function maps every standard action of that function to them. The plan is generated as soon as all mandatory roles are filled.</div>
+    <div class="f3"><div class="field"><label>BU Buyer (Initiator)</label><input value="${me}" disabled><span class="hint">${email(me)}</span></div>${TEAM_ROWS.map(([f,l])=>`<div class="field"><label>${l} ${REQUIRED_TEAM.includes(f)?'<span class="req">*</span>':''}</label><select onchange="W.team['${f}']=this.value;rWiz()"><option value="">Assign</option>${PEOPLE[f].map(n=>`<option ${W.team[f]===n?'selected':''}>${n}</option>`).join('')}</select><span class="hint">${W.team[f]?email(W.team[f]):'&nbsp;'}</span></div>`).join('')}</div>
+    <div class="mfoot"><button class="btn secondary" onclick="W.step=0;rWiz()">Back</button><button class="btn" onclick="wizNext()">Generate action plan</button></div>`;
+  if(W.step===2){
+    const tmp={id:'NEW',created:TODAY,team:W.team}; tmp.actions=buildActions(tmp); schedule(tmp); const acts=tmp.actions, ss=summary(tmp);
+    b.innerHTML=`<h2>New project · 3 of 3 · Generated action plan</h2>${steps}<div class="note">${acts.length} actions generated from the standard template with default lead times · overall lead time ${ss.leadTotal} days · projected completion <b>${fmt(ss.target)}</b>. ${ss.undated} action${ss.undated>1?'s have':' has'} no default lead time in the process sheet; set them in the project view.</div>
+    <table>${acts.map((a,i)=>(i===0||acts[i-1].ph!==a.ph?`<tr><td colspan="5" class="bold" style="background:var(--panel)">${PHASES[a.ph]}</td></tr>`:'')+`<tr><td><b>${a.tab}</b> · ${a.act}</td><td class="muted">${a.fn}</td><td>${a.owner||'<span class="req">unassigned</span>'}</td><td class="num">${a.lead===null?'<span class="hint">—</span>':a.lead+' d'}</td><td>${a.due?fmt(a.due):'<span class="hint">set later</span>'}</td></tr>`).join('')}</table>
+    <div class="mfoot"><button class="btn secondary" onclick="W.step=1;rWiz()">Back</button><button class="btn" onclick="createProject()">Create project and send assignments</button></div>`;
+  }
+}
+function wizNext(){
+  if(W.step===0){const need=['pn','desc','plant','bu','reason','cur','nw'];if(need.some(k=>!W.d[k])){toast('Fill in the required fields marked *');return;}}
+  if(W.step===1){W.team[INITIATOR_FN]=me;if(REQUIRED_TEAM.some(k=>!W.team[k])){toast('Assign all mandatory team members before the plan can be generated');return;}}
+  W.step++;rWiz();
+}
+function createProject(){
+  const id='TR-2026-0'+(30+projects.length);
+  const p={id,...W.d,cav:W.d.cav||'',po:W.d.po||'',tag:W.d.tag||'',tooOwner:W.d.tooOwner||'',oem:W.d.oem||'',tech:W.d.tech||'',saving:W.d.saving||'',created:TODAY,team:{...W.team},owner:me};
+  p.actions=buildActions(p); schedule(p); projects.unshift(p); closeM('wiz'); current=p; view='project'; render();
+  toast(`${id} created · assignment emails queued for ${[...new Set(p.actions.map(a=>a.owner))].length} owners`);
+}
+
+/* ---------- admin: people & functions ---------- */
+function rAdmin(){
+  return `<div class="head"><div><h1>Admin · People &amp; functions</h1><div class="sub">Names and emails offered in team setup and owner fields. Functions define the responsible-function options in the template.</div></div></div>
+  <div class="card" style="margin-bottom:14px"><h2>Data &amp; saving</h2>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="btn" onclick="saveWorkspaceFile()">⬇ Save workspace file</button>
+    <label class="btn secondary" style="cursor:pointer">⬆ Load workspace file<input type="file" accept=".json" style="display:none" onchange="loadWorkspaceFile(this.files[0]);this.value=''"></label>
+    <button class="btn secondary" onclick="exportPortfolio()">⬇ Export all projects to Excel</button>
+    <button class="btn secondary" style="color:var(--r)" onclick="resetDemo()">Reset to demo data</button>
+    <span class="hint" id="saveLbl2">${STORAGE_OK?`Everything you change (projects, uploads, people, rules) is autosaved in this browser and comes back when you reopen the file here.`:`This browser is not keeping data between sessions — save a workspace file to keep your work.`}</span></div>
+   <div class="hint" style="margin-top:8px">The workspace file is the complete state (projects, action plans, people, functions, rules) and can be loaded on another PC or shared with a colleague. The Excel export is the readable record and can be re-uploaded on the Portfolio.</div></div>
+  <div class="grid c2">
+   <div class="card"><h2>People</h2>
+    <table><thead><tr><th>Name</th><th>Function</th><th>Email</th><th>Dashboard admin</th><th></th></tr></thead><tbody>
+    ${FUNCTIONS.flatMap(f=>(PEOPLE[f]||[]).map(n=>`<tr><td>${n}</td><td>${f}</td><td class="muted">${email(n)}</td><td><input type="checkbox" ${isAdmin(n)?'checked':''} onchange="toggleAdmin('${n}',this.checked)"></td><td><button class="link" style="font-size:12px" onclick="removePerson('${f}','${n}')">remove</button></td></tr>`)).join('')}
+    <tr><td><input id="apN" placeholder="Full name" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td>
+    <td><select id="apF" style="border:1px solid var(--line);border-radius:4px;padding:5px">${FUNCTIONS.map(f=>`<option>${f}</option>`).join('')}</select></td>
+    <td><input id="apE" placeholder="email (optional)" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td>
+    <td></td><td><button class="btn sm" onclick="addPerson()">Add</button></td></tr></tbody></table>
+    <div class="hint" style="margin-top:8px">Dashboard admins can delete projects and any added action item; other users can only delete items they created themselves. Removing a person does not change existing projects — reassign owners in the project first.</div></div>
+   <div class="card"><h2>Functions</h2>
+    <table><thead><tr><th>Function (editable)</th><th>Team-setup label (editable)</th><th>Mandatory</th><th class="num">Template actions</th></tr></thead><tbody>
+    ${FUNCTIONS.map((f,i)=>{const tr=TEAM_ROWS.find(t=>t[0]===f);const used=MATRIX.filter(m=>m.fn===f).length;const st='border:1px solid var(--line);border-radius:4px;padding:4px 6px;width:100%';return `<tr><td><input value="${f}" onchange="renameFunction(${i},this.value)" style="${st};font-weight:600"></td><td>${f===INITIATOR_FN?'<span class="muted">Initiator (fills automatically)</span>':`<input value="${tr?tr[1]:''}" placeholder="label in team setup" onchange="setFnLabel('${f}',this.value)" style="${st}">`}</td><td>${f===INITIATOR_FN?'—':`<input type="checkbox" ${REQUIRED_TEAM.includes(f)?'checked':''} onchange="toggleRequired('${f}',this.checked)">`}</td><td class="num">${used}${f!==INITIATOR_FN&&!used&&!(PEOPLE[f]||[]).length?` <button class="link" style="font-size:12px" onclick="deleteFunction('${f}')">delete</button>`:''}</td></tr>`}).join('')}
+    <tr><td><input id="afN" placeholder="e.g. Quality" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td><td><input id="afL" placeholder="label in team setup" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td><td><input type="checkbox" id="afR"></td><td><button class="btn sm" onclick="addFunction()">Add</button></td></tr></tbody></table>
+    <div class="hint" style="margin-top:8px">Edit a name or label directly in the row. Renaming a function updates the template, the people list and every project's team and actions. A function can only be deleted when no template action and no person uses it.</div></div>
+  </div>`;
+}
+function addPerson(){
+  const n=document.getElementById('apN').value.trim(),f=document.getElementById('apF').value,e=document.getElementById('apE').value.trim();
+  if(!n){toast('Enter a name');return;}
+  (PEOPLE[f]=PEOPLE[f]||[]); if(!PEOPLE[f].includes(n)) PEOPLE[f].push(n); if(e) EMAILS[n]=e;
+  refreshUsers(); render(); toast(`${n} added to ${f}`);
+}
+function toggleAdmin(n,on){const i=ADMINS.indexOf(n);if(on&&i<0)ADMINS.push(n);if(!on&&i>=0){if(ADMINS.length===1){toast('Keep at least one admin');render();return;}ADMINS.splice(i,1);}render();toast(`${n} is ${on?'now':'no longer'} a dashboard admin`)}
+function removePerson(f,n){PEOPLE[f]=PEOPLE[f].filter(x=>x!==n);refreshUsers();render();toast(`${n} removed from ${f}`)}
+function addFunction(){
+  const f=document.getElementById('afN').value.trim(),l=document.getElementById('afL').value.trim()||document.getElementById('afN').value.trim(),r=document.getElementById('afR').checked;
+  if(!f){toast('Enter a function name');return;} if(FUNCTIONS.includes(f)){toast('Function already exists');return;}
+  FUNCTIONS.push(f); PEOPLE[f]=[]; TEAM_ROWS.push([f,l]); if(r) REQUIRED_TEAM.push(f); render(); toast(`Function ${f} added`);
+}
+function renameFunction(i,nv){
+  nv=nv.trim(); const old=FUNCTIONS[i]; if(!nv||nv===old){render();return;} if(FUNCTIONS.includes(nv)){toast('That function name already exists');render();return;}
+  FUNCTIONS[i]=nv; PEOPLE[nv]=PEOPLE[old]||[]; delete PEOPLE[old];
+  TEAM_ROWS.forEach(t=>{if(t[0]===old){t[0]=nv; if(t[1]===old) t[1]=nv;}});
+  const ri=REQUIRED_TEAM.indexOf(old); if(ri>=0) REQUIRED_TEAM[ri]=nv;
+  MATRIX.forEach(m=>{if(m.fn===old)m.fn=nv});
+  projects.forEach(p=>{if(old in p.team){p.team[nv]=p.team[old];delete p.team[old];} p.actions.forEach(a=>{if(a.fn===old)a.fn=nv});});
+  if(F.fn===old)F.fn=nv; render(); toast(`${old} renamed to ${nv} everywhere`);
+}
+function setFnLabel(f,l){const t=TEAM_ROWS.find(t=>t[0]===f); l=l.trim()||f; if(t)t[1]=l; else TEAM_ROWS.push([f,l]); render(); toast(`Team-setup label for ${f}: ${l}`)}
+function deleteFunction(f){FUNCTIONS=FUNCTIONS.filter(x=>x!==f);delete PEOPLE[f];TEAM_ROWS=TEAM_ROWS.filter(t=>t[0]!==f);const ri=REQUIRED_TEAM.indexOf(f);if(ri>=0)REQUIRED_TEAM.splice(ri,1);render();toast(`Function ${f} deleted`)}
+function toggleRequired(f,on){const i=REQUIRED_TEAM.indexOf(f);if(on&&i<0)REQUIRED_TEAM.push(f);if(!on&&i>=0)REQUIRED_TEAM.splice(i,1);toast(`${f} ${on?'is now mandatory':'is optional'} in team setup`)}
+function refreshUsers(){
+  const us=document.getElementById('userSel'); if(!allPeople().includes(me)) me=allPeople()[0];
+  const old=us.parentNode.querySelector('input,datalist'); us.parentNode.querySelectorAll('input,datalist').forEach(x=>x.remove()); delete us.dataset.enhanced;
+  us.innerHTML=''; allPeople().forEach(n=>{const o=document.createElement('option');o.textContent=n;o.value=n;if(n===me)o.selected=true;us.appendChild(o)});
+  enhanceSelects(us.parentNode);
+}
+
+/* ---------- project delete (admin) & Excel import ---------- */
+function deleteProject(id){
+  if(!isAdmin(me)){toast('Only a dashboard admin can delete projects');return;}
+  const p=projects.find(x=>x.id===id); if(!confirm(`Delete ${p.id} · ${p.desc} with all its actions? This cannot be undone.`)) return;
+  projects=projects.filter(x=>x.id!==id); if(current&&current.id===id){current=null;view='portfolio';} render(); toast(`${id} deleted`);
+}
+function downloadTemplate(){
+  const tmp={id:'',pn:'',desc:'',plant:'',reason:'',cur:'',nw:'',po:'',tag:'',tooOwner:'',cav:'',oem:'',tech:'',saving:'',bu:'',created:TODAY,team:{}}; tmp.actions=buildActions(tmp);
+  const row=flatRow(tmp); Object.keys(row).forEach(k=>row[k]=''); const ex={...row,'Part Number':'55A-000-000','Part Description':'Example part','Plant affected':'Aschau','Reason':'Tool end of life','Current Supplier':'Supplier A','New Supplier':'Supplier B','Cavities':'4','Project':'TR-2026-099','BU':'Airbag','Created':'2026-09-01','CR':'CR-12345'};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,sheet([ex]),'Portfolio'); XLSX.writeFile(wb,'Tooling_Import_Template.xlsx'); toast('Template downloaded — one example row included, replace it with your projects');
+}
+const norm=k=>String(k||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const ALIASES={pn:['partnumber','partno','pn'],desc:['partdescription','description'],plant:['plantaffected','plant','affectedplant'],reason:['reason','reasonfortheproject'],cur:['currentsupplier','oldsupplier'],nw:['newsupplier'],po:['toolpo','po'],tag:['tooltag','tag'],tooOwner:['toolowner'],cav:['cavities','numberofcavities','cavity'],saving:['estimatedsavingyr','estimatedsaving','saving','savings'],oem:['oem','customer'],tech:['tech','technology'],id:['project','projectid','projectno'],bu:['bu','businessunit'],created:['created','creationdate','projectcreationdate','startdate']};
+function parseDate(v){ if(!v&&v!==0) return null; if(v instanceof Date) return isNaN(v)?null:v; if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*86400000));return d;} const d=new Date(String(v)); return isNaN(d)?null:d; }
+function importExcel(file){
+  if(!file) return; const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true}); const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); if(!rows.length){toast('No rows found in the first sheet');return;}
+      let created=0,updated=0,vals=0;
+      rows.forEach(r=>{
+        const g=(aliases)=>{const k=Object.keys(r).find(k=>aliases.includes(norm(k)));return k===undefined?'':r[k];};
+        const f={}; Object.entries(ALIASES).forEach(([k,al])=>f[k]=g(al));
+        if(!f.pn&&!f.desc&&!f.id) return;
+        const cr=parseDate(f.created)||TODAY; let id=String(f.id||'').trim()||('TR-'+cr.getFullYear()+'-0'+(30+projects.length+created));
+        let p=projects.find(x=>x.id===id); const isNew=!p;
+        if(isNew){p={id,team:{},owner:me,created:cr,tooOwner:''};projects.unshift(p);created++;}else updated++;
+        Object.assign(p,{pn:String(f.pn||p.pn||''),desc:String(f.desc||p.desc||''),plant:String(f.plant||p.plant||''),reason:String(f.reason||p.reason||''),cur:String(f.cur||p.cur||''),nw:String(f.nw||p.nw||''),po:String(f.po||p.po||''),tag:String(f.tag||p.tag||''),tooOwner:String(f.tooOwner||p.tooOwner||''),cav:String(f.cav||p.cav||''),saving:String(f.saving||p.saving||''),oem:String(f.oem||p.oem||''),tech:String(f.tech||p.tech||''),bu:String(f.bu||p.bu||'')});
+        // team: by label ("SDE", "Engineer", "Tactical/BU", ...) or function name; initiator
+        p.team[INITIATOR_FN]=String(g(['initiator','bubuyer','buyer'])||p.team[INITIATOR_FN]||me);
+        TEAM_ROWS.forEach(([fn,l])=>{const v=g([norm(l),norm(fn)]); if(v) p.team[fn]=String(v);});
+        if(isNew){p.actions=buildActions(p);schedule(p);p.owner=p.team[INITIATOR_FN];}
+        else p.actions.forEach(a=>{if(!a.custom&&!a.owner)a.owner=p.team[a.fn]||'';});
+        // action values: header = Tab or "Tab – input"
+        p.actions.forEach(a=>{const v=g([norm(colName(a,p.actions)),norm(a.tab)]); if(v!==''&&v!==null&&v!==undefined){const d=parseDate(v); a.value=(/date/i.test(a.input)&&d)?d2s(d):String(v); if(!a.done){a.done=d2s(TODAY);} vals++;}});
+        schedule(p);
+      });
+      render(); toast(`Imported: ${created} new, ${updated} updated, ${vals} action values filled`);
+    }catch(err){console.error(err);toast('Could not read the file — check it is an .xlsx with headers in row 1');}
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+/* ---------- Excel export (SheetJS) ---------- */
+const cellStatus=a=>a.done?`Done ${fmt(a.done)}`:!a.due?'No due date':aStatus(a)==='red'?`OVERDUE ${-days(TODAY,a.due)} d (due ${fmt(a.due)})`:`Due ${fmt(a.due)}`;
+/* Flat row: master data → team → every action's entered value, in template order (header = Tab, or Tab – input when a tab has several rows) */
+function colName(a,all){const same=all.filter(x=>x.tab===a.tab);return same.length>1?`${a.tab} – ${a.input}`:a.tab;}
+function flatRow(p){
+  const r={'Part Number':p.pn,'Part Description':p.desc,'Plant affected':p.plant,'Reason':p.reason,'Current Supplier':p.cur,'New Supplier':p.nw,'Tool PO':p.po,'Tool Tag':p.tag,'Tool Owner':p.tooOwner,'Cavities':p.cav,'OEM':p.oem||'','Tech':p.tech||'','Estimated saving (€/yr)':p.saving||'','Project':p.id,'BU':p.bu,'Created':fmt(d2s(p.created)),'Initiator':p.team['BU Buyer']||''};
+  TEAM_ROWS.forEach(([f,l])=>{r[l]=p.team[f]||'';});
+  p.actions.forEach(a=>{r[colName(a,p.actions)]=a.value||'';});
+  return r;
+}
+function projectRow(p){
+  const s=summary(p);
+  const r={'Project':p.id,'Part Number':p.pn,'Part Description':p.desc,'Plant':p.plant,'BU':p.bu,'Reason':p.reason,'Current Supplier':p.cur,'New Supplier':p.nw,'Tool PO':p.po,'Tool Tag':p.tag,'Tool Owner':p.tooOwner,'Cavities':p.cav,'Created':fmt(d2s(p.created)),'Project owner':p.owner};
+  TEAM_ROWS.forEach(([f,l])=>{r['Team: '+l]=p.team[f]||'';});
+  Object.assign(r,{'Current phase':PHASES[s.phase],'Overall status':PSL[s.overall],'Completion %':s.pct,'Total actions':s.total,'Completed':s.green,'Open':s.open,'Overdue':s.red,'Due soon':s.yellow,'Without due date':s.undated,'Timings adjusted':s.adjusted,'Overall lead time (d)':s.leadTotal,'Projected completion':fmt(s.target),'Next milestone':s.next?`${s.next.tab} · ${fmt(s.next.due)}`:'','Red flags':p.actions.filter(a=>aStatus(a)==='red').map(a=>`${a.tab} (${a.owner}, ${-days(TODAY,a.due)} d)`).join('; ')});
+  p.actions.forEach(a=>{r[`${PHASES[a.ph].slice(0,2)} ${a.tab}${a.custom?' (added)':''}`]=`${cellStatus(a)} · ${a.owner}${a.value?' · '+a.value:''}`;});
+  return r;
+}
+function actionRow(p,a){const s=summary(p);return {'Project':p.id,'Part Description':p.desc,'Plant':p.plant,'BU':p.bu,'Phase':PHASES[a.ph],'Tab':a.tab,'Action':a.act,'Required input':a.input,'Entered value':a.value,'Function':a.fn,'Owner':a.owner,'Owner email':email(a.owner),'Counted from':a.dep?(byId(p,a.dep)||{}).tab||'':'Project creation','Default lead (d)':a.leadDefault??'','Adjusted lead (d)':a.lead??'','Due date':a.due?fmt(a.due):'','Completed':a.done?fmt(a.done):'','Status':stLabel(a),'Days remaining / overdue':a.done||!a.due?'':days(TODAY,a.due),'Comment':a.comment||'','Link':a.link||'','Added to project':a.custom?'Yes':'','Last manual reminder':a.lastRemind?fmt(a.lastRemind):''}}
+function sheet(rows){const keys=[];rows.forEach(r=>Object.keys(r).forEach(k=>{if(!keys.includes(k))keys.push(k)}));rows=rows.map(r=>{const o={};keys.forEach(k=>o[k]=r[k]??'');return o});const ws=XLSX.utils.json_to_sheet(rows,{header:keys});ws['!cols']=keys.map(k=>({wch:Math.min(45,Math.max(k.length+2,...rows.map(r=>String(r[k]??'').length+2)))}));ws['!autofilter']={ref:ws['!ref']};return ws;}
+function exportPortfolio(){
+  const list=filteredProjects(); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,sheet(list.map(flatRow)),'Portfolio');
+  XLSX.utils.book_append_sheet(wb,sheet(list.map(projectRow)),'Status');
+  XLSX.utils.book_append_sheet(wb,sheet(list.flatMap(p=>p.actions.map(a=>actionRow(p,a)))),'Actions');
+  XLSX.utils.book_append_sheet(wb,sheet(list.flatMap(p=>TEAM_ROWS.map(([f,l])=>({'Project':p.id,'Function':l,'Name':p.team[f]||'','Email':email(p.team[f])})))),'Teams');
+  XLSX.writeFile(wb,`Tooling_Portfolio_${d2s(TODAY)}.xlsx`); toast(`${list.length} projects exported`);
+}
+function exportProject(){
+  const p=current; const wb=XLSX.utils.book_new(); const s=summary(p);
+  XLSX.utils.book_append_sheet(wb,sheet([flatRow(p)]),'Project');
+  XLSX.utils.book_append_sheet(wb,sheet([projectRow(p)]),'Status');
+  XLSX.utils.book_append_sheet(wb,sheet(p.actions.map(a=>actionRow(p,a))),'Action plan');
+  XLSX.writeFile(wb,`${p.id}_${d2s(TODAY)}.xlsx`); toast(`${p.id} exported`);
+}
+
+/* ---------- persistence ---------- */
+const STORE_KEY='trw-workspace-v1';
+function snapshot(){return {v:1,savedAt:new Date().toISOString(),projects:projects.map(p=>({...p,created:d2s(p.created)})),PEOPLE,EMAILS,ADMINS,FUNCTIONS,TEAM_ROWS,REQUIRED_TEAM,MATRIX,RULES,CUSTOM_SEQ};}
+function restore(d){
+  projects=d.projects.map(p=>({...p,created:new Date(p.created)})); Object.keys(PEOPLE).forEach(k=>delete PEOPLE[k]); Object.assign(PEOPLE,d.PEOPLE); Object.assign(EMAILS,d.EMAILS||{});
+  ADMINS=d.ADMINS||ADMINS; FUNCTIONS=d.FUNCTIONS||FUNCTIONS; TEAM_ROWS=d.TEAM_ROWS||TEAM_ROWS; REQUIRED_TEAM=d.REQUIRED_TEAM||REQUIRED_TEAM; MATRIX.length=0; (d.MATRIX||[]).forEach(m=>MATRIX.push(m)); RULES=d.RULES||RULES; CUSTOM_SEQ=d.CUSTOM_SEQ||0;
+  projects.forEach(schedule); LAST_SAVED=d.savedAt||null;
+}
+let LAST_SAVED=null, STORAGE_OK=true;
+function autosave(){ try{ const snap=snapshot(); localStorage.setItem(STORE_KEY,JSON.stringify(snap)); LAST_SAVED=snap.savedAt; STORAGE_OK=true; }catch(e){ STORAGE_OK=false; } const el=document.getElementById('saveLbl'); if(el) el.textContent=STORAGE_OK?`Autosaved in this browser ${new Date(LAST_SAVED).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`:'Not autosaved here — use Save workspace file (Admin)'; }
+function loadAutosave(){ try{ const raw=localStorage.getItem(STORE_KEY); if(raw){ restore(JSON.parse(raw)); return true; } }catch(e){} return false; }
+function saveWorkspaceFile(){ const snap=snapshot(); const blob=new Blob([JSON.stringify(snap,null,1)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`Tooling_Workflow_workspace_${d2s(TODAY)}.json`; a.click(); toast('Workspace file downloaded — load it on any device from Admin'); }
+function loadWorkspaceFile(file){ if(!file) return; const rd=new FileReader(); rd.onload=e=>{ try{ restore(JSON.parse(e.target.result)); refreshUsers(); render(); toast(`Workspace loaded · ${projects.length} projects`);}catch(err){toast('Could not read that workspace file');} }; rd.readAsText(file); }
+function resetDemo(){ if(!confirm('Replace everything with the demo data? Your projects, people and settings in this browser will be lost.')) return; try{localStorage.removeItem(STORE_KEY);}catch(e){} location.reload(); }
+
+/* ---------- misc ---------- */
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),3200)}
+document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{view=b.dataset.v;render()});
+refreshUsers();
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+render();
+</script>
+</body>
+</html>
