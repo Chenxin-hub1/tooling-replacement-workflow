@@ -615,3 +615,93 @@ test("imported free text and project ids render literally instead of executing",
   await expect(page.locator("h1")).toContainText("window.__xss=2");
   expect(await page.evaluate("window.__xss")).toBeUndefined();
 });
+
+test("orphan backups left by other tabs are listed and deletable in Admin", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  await page.evaluate(
+    "localStorage.setItem('trw-unsaved-server-workspace-orphan0001', JSON.stringify({revision: 9, writtenAt: Date.now(), snapshot: snapshot()}))",
+  );
+  await page.locator('[data-v="admin"]').click();
+  await expect(page.getByText("Another tab")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Download unsaved backup" }),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByText("Another tab")).not.toBeVisible();
+  expect(
+    await page.evaluate(
+      "localStorage.getItem('trw-unsaved-server-workspace-orphan0001')",
+    ),
+  ).toBeNull();
+});
+
+test("expired orphan backups are pruned when the page loads", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  await page.evaluate(
+    "localStorage.setItem('trw-unsaved-server-workspace-fresh0001', JSON.stringify({revision: 2, writtenAt: Date.now(), snapshot: snapshot()}));" +
+      "localStorage.setItem('trw-unsaved-server-workspace-stale001', JSON.stringify({revision: 1, writtenAt: Date.now() - 15*24*3600*1000, snapshot: snapshot()}))",
+  );
+  await page.reload();
+  await ready(page);
+  expect(
+    await page.evaluate(
+      "localStorage.getItem('trw-unsaved-server-workspace-stale001')",
+    ),
+  ).toBeNull();
+  expect(
+    await page.evaluate(
+      "localStorage.getItem('trw-unsaved-server-workspace-fresh0001')",
+    ),
+  ).not.toBeNull();
+});
+
+test("loading a workspace file clears a save conflict without reloading", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  const original = await page.evaluate("JSON.stringify(snapshot())");
+  let conflict = true;
+  await page.route("**/api/workspace", (route) => {
+    if (route.request().method() === "PUT" && conflict)
+      return route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Workspace changed on another page." }),
+      });
+    return route.continue();
+  });
+  await page.evaluate("projects[0].desc='Conflict local edit';render()");
+  await page.waitForFunction("serverConflict === true");
+  const recovered = await page.evaluate(
+    "JSON.stringify((() => { const snap = snapshot(); snap.projects[0].desc = 'Recovered from file'; return snap; })())",
+  );
+  conflict = false;
+  await page.locator('[data-v="admin"]').click();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "recovered.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(recovered, "utf8"),
+  });
+  await page.waitForFunction("serverConflict === false && STORAGE_OK");
+  expect(await page.evaluate("projects[0].desc")).toBe("Recovered from file");
+  // 还原服务器工作区内容，后续用例仍从初始数据开始。
+  await page.evaluate(async (snap) => {
+    const current = await (await fetch("/api/workspace")).json();
+    await fetch("/api/workspace", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        revision: current.revision,
+        snapshot: JSON.parse(snap),
+      }),
+    });
+  }, original);
+});

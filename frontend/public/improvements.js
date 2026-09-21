@@ -451,22 +451,32 @@ importExcel = async function (file) {
   }
 };
 const originalAdmin = rAdmin;
+let adminBackups = [];
 rAdmin = function () {
   const html = originalAdmin();
-  let backup = null;
-  try {
-    backup = localStorage.getItem(BACKUP_KEY);
-  } catch (_) {}
-  return (
-    html +
-    (backup
-      ? '<div class="card" style="margin-top:14px"><h2>Unsaved local backup</h2><p>A previous change was not confirmed by the server. Download it before deciding whether to restore it with Load workspace file.</p><button class="btn secondary" onclick="downloadUnsavedBackup()">Download unsaved backup</button></div>'
-      : "")
-  );
+  // 当前标签页的实时备份和其他标签页遗留的孤儿备份都在这里集中展示；
+  // 孤儿备份由 workspace.js 在页面加载时按保留策略（14 天 / 份数上限）淘汰。
+  adminBackups = listLocalBackups();
+  if (!adminBackups.length) return html;
+  const rows = adminBackups
+    .map(
+      (backup, index) =>
+        `<tr><th>${backup.live ? "This tab" : "Another tab"}</th><td>${escapeText(
+          backup.when
+            ? new Date(backup.when).toLocaleString("en-GB")
+            : "date unknown",
+        )} · revision ${backup.revision}</td><td><button class="btn secondary" onclick="downloadLocalBackup(${index})">Download unsaved backup</button>${
+          backup.live
+            ? ""
+            : ` <button class="btn secondary" onclick="discardLocalBackup(${index})">Delete</button>`
+        }</td></tr>`,
+    )
+    .join("");
+  return `${html}<div class="card" style="margin-top:14px"><h2>Unsaved local backups</h2><p>Changes the server never confirmed. Download a backup before restoring it with Load workspace file; backups left by other tabs are removed after two weeks.</p><table>${rows}</table></div>`;
 };
-function downloadUnsavedBackup() {
+function downloadLocalBackup(index) {
   try {
-    const stored = JSON.parse(localStorage.getItem(BACKUP_KEY));
+    const stored = JSON.parse(localStorage.getItem(adminBackups[index].key));
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(stored.snapshot, null, 2)], {
         type: "application/json",
@@ -481,6 +491,30 @@ function downloadUnsavedBackup() {
     toast("No local backup is available.");
   }
 }
+function discardLocalBackup(index) {
+  const backup = adminBackups[index];
+  if (
+    !backup ||
+    !confirm("Delete this unsaved backup? Its changes cannot be recovered.")
+  )
+    return;
+  try {
+    localStorage.removeItem(backup.key);
+  } catch (_) {}
+  render();
+}
+// 样板的载入函数没有完成回调：一次性挂钩 restore，在文件成功载入后立刻
+// 取回最新版本号解锁保存冲突并提交，不必刷新页面或等下一次交互。
+const originalLoadWorkspaceFile = loadWorkspaceFile;
+loadWorkspaceFile = function (file) {
+  const originalRestore = restore;
+  restore = function (data) {
+    restore = originalRestore;
+    originalRestore(data);
+    void recoverAndSave();
+  };
+  originalLoadWorkspaceFile(file);
+};
 const originalProject = rProject;
 rProject = function () {
   const html = originalProject();
