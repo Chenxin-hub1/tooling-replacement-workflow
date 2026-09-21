@@ -62,6 +62,15 @@ backend/.venv/bin/python scripts/backup-sqlite.py backend/tooling.db backups/too
 
 恢复步骤：停止服务，将当前 `.db`、`-wal`、`-shm` 文件整体移到独立保留目录，将备份复制到原数据库路径，再启动服务并检查项目数及健康状态。不要把旧 WAL 文件留在恢复后的数据库旁边。
 
+### 工作区自动快照（2026-09-21）
+
+`PUT /api/workspace` 每次真实变更保存成功后，服务端自动把整份工作区 JSON 写入快照目录，滚动保留最近 50 份：
+
+- 目录默认跟随数据库文件：`<数据库目录>/backups/workspace`（本机即 `backend/backups/workspace`，Docker 为 `/data/backups/workspace`，随数据卷持久化）；可用环境变量 `SNAPSHOT_DIR` 覆盖。该目录已在 `.gitignore` 忽略，不随仓库分发。
+- 文件名 `workspace-<UTC 时间戳>-r<版本号>.json`，内容与「Admin · Save workspace file」导出的工作区文件一致。
+- 幂等重试（内容未变）与 409 冲突不产生快照；快照写入失败只记告警，不影响保存结果。
+- 恢复：在「Admin · Load workspace file」直接上传某个快照 JSON（走正常保存链路，产生新版本与新快照），或 `GET /api/workspace` 取得当前 revision 后 `PUT` 回快照内容。
+
 本轮已在独立演示库验证备份，并比对备份中的 6 项项目数据；未对用户原库执行恢复。
 
 ## 当前页面的数据来源

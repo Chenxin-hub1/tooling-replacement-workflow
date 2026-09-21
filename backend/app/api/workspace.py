@@ -1,11 +1,13 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Body, HTTPException, Response
+from starlette.concurrency import run_in_threadpool
 
 from app.api.routes import Database, WriteDatabase, save
 from app.models.workspace import Workspace
 from app.schemas.workspace import WorkspaceResponse, WorkspaceWrite
 from app.services.workspace_identity import tool_identity
+from app.services.workspace_snapshots import write_snapshot
 
 router = APIRouter(prefix="/workspace", tags=["Workspace"])
 
@@ -44,6 +46,8 @@ async def put_workspace(data: WorkspaceWrite, db: WriteDatabase):
         workspace.revision += 1
         workspace.document = document
     await save(db)
+    # 每次真实变更后留一份服务端快照；尽力而为，失败不影响保存结果。
+    await run_in_threadpool(write_snapshot, document, workspace.revision)
     return {"revision": workspace.revision, "snapshot": workspace.document}
 
 

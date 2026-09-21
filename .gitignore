@@ -22,3 +22,5 @@ frontend/playwright-report/
 *.tsbuildinfo
 .demo/
 .playwright-mcp/
+# 工作区自动快照与手工数据库备份目录，不随仓库分发
+backups/
