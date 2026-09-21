@@ -3,10 +3,7 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 const context: Record<string, any> = { Date };
 runInNewContext(
-  readFileSync(
-    new URL("../../public/workflow-core.js", import.meta.url),
-    "utf8",
-  ),
+  readFileSync(new URL("../public/workflow-core.js", import.meta.url), "utf8"),
   context,
 );
 const core = context.Workflow;

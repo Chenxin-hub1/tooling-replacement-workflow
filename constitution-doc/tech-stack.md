@@ -4,7 +4,9 @@
 
 ## 样板发布约束（2026-09-15 用户指令优先）
 
-正式页面由 `.design/reference/tooling-replacement-workflow_3459.html` 生成，保留原生 HTML/CSS/JavaScript，不重新用组件库设计。Vite 负责静态打包，FastAPI + SQLite 保存完整工作区 JSON（含可编辑模板、人员职能与提醒规则），版本号防止并发覆盖。原 React 源码暂留作历史实现，不参与入口渲染；旧项目 API 不作为样板工作区的数据接口。
+正式页面由 `.design/reference/tooling-replacement-workflow_3459.html` 生成，保留原生 HTML/CSS/JavaScript，不重新用组件库设计。Vite 负责静态打包，FastAPI + SQLite 保存完整工作区 JSON（含可编辑模板、人员职能与提醒规则），版本号防止并发覆盖。旧项目 API 不作为样板工作区的数据接口。
+
+2026-09-21 用户决定：退役的 React 实现移出仓库——`frontend/src/` 与 React/Tailwind/openapi 生成客户端等全部相关依赖删除（git 历史可查）。保留 vite（静态打包与开发代理）、vitest（`workflow-core` 排期引擎单测，随迁至 `frontend/tests/`）、Playwright 与 prettier。
 
 ## Core
 
