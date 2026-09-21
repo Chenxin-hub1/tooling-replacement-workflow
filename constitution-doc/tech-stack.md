@@ -100,4 +100,4 @@ Adds to the backend/frontend stack when the project is an AI-agent app.
 
 ## 本轮授权优化的接入位置
 
-保持原生样板生成入口，`frontend/public/improvements.js` 承载已授权的导入/日期/校验修正，`workflow-core.js` 为独立测试规则，`mobile.css` 仅覆盖小屏。工作区 API 保留未来身份依赖接入位置；用户当前不启用账号或真实邮件/Teams。详见 `../docs/optimization-2026-09-15.md`。
+保持原生样板生成入口，`frontend/public/improvements.js` 承载已授权的导入/日期/校验修正，`workflow-core.js` 为独立测试规则，`mobile.css` 仅覆盖小屏。HTML 转义（`escHtml`/`escJs`）由 `prepare-prototype.mjs` 在生成 `prototype.js` 时注入并断言出现次数，不在样板源文件中维护。工作区 API 保留未来身份依赖接入位置；用户当前不启用账号或真实邮件/Teams。详见 `../docs/optimization-2026-09-15.md`。

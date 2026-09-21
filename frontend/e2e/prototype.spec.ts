@@ -570,3 +570,48 @@ test("long dependency chains schedule correctly and incomplete progress stays be
   })()`),
   ).toBe(99);
 });
+
+test("imported free text and project ids render literally instead of executing", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  // 屏蔽自动保存：恶意工作区只留在本页内存，不写服务器，不影响后续用例。
+  await page.evaluate(`autosave = () => {};
+    restore(${JSON.stringify({
+      v: 1,
+      savedAt: "2026-09-21T00:00:00Z",
+      projects: [
+        {
+          id: `TR'"><img src=x onerror="window.__xss=2">`,
+          created: "2026-09-12",
+          pn: "<script>window.__xss=3</script>",
+          desc: `<img src=x onerror="window.__xss=1">`,
+          plant: "Aschau",
+          bu: "Airbag",
+          team: { "BU Buyer": "Carrie Chen" },
+          owner: "Carrie Chen",
+          actions: [],
+        },
+      ],
+      PEOPLE: { "BU Buyer": ["Carrie Chen"] },
+      EMAILS: {},
+      ADMINS: ["Carrie Chen"],
+      FUNCTIONS: ["BU Buyer"],
+      TEAM_ROWS: [],
+      REQUIRED_TEAM: [],
+      MATRIX: [],
+      RULES: { before: 5, overdueEvery: 2, escalateAfter: 5, channel: "both" },
+      CUSTOM_SEQ: 0,
+    })});
+    render();`);
+  await expect(page.locator("tbody")).toContainText(
+    '<img src=x onerror="window.__xss=1">',
+  );
+  await expect(page.locator("tbody img")).toHaveCount(0);
+  await expect(page.locator("tbody script")).toHaveCount(0);
+  // 行内联事件携带的 ID 转义后仍是合法 JS 字符串：点击照常打开项目页。
+  await page.locator("tr.row").first().click();
+  await expect(page.locator("h1")).toContainText("window.__xss=2");
+  expect(await page.evaluate("window.__xss")).toBeUndefined();
+});

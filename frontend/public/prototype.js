@@ -64,6 +64,10 @@ let RULES = {before:5, overdueEvery:2, escalateAfter:5, channel:'both'};
 const CH={email:'✉ Email',teams:'💬 Teams',both:'✉ Email + 💬 Teams'};
 
 /* ---------- helpers ---------- */
+// 构建脚本注入的转义助手（避开样板 openRemind 里已有的局部变量 esc）：escHtml 转义 HTML 文本/属性，
+// escJs 保护内联事件属性里嵌的 JS 字符串（引号、反斜杠、换行）。
+const escHtml = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const escJs = (v) => String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/[\r\n]+/g, " ").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const d2s = d => d.toISOString().slice(0,10);
 const addDays = (d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
 const days = (a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
@@ -181,15 +185,15 @@ function allPeople(){return [...new Set(Object.values(PEOPLE).flat())]}
 function filterBar(showActionFilters){
   const uniq=k=>[...new Set(projects.map(p=>p[k]))];
   return `<div class="filters">
-   <input placeholder="Project / part no." value="${F.q}" oninput="F.q=this.value;render()">
-   <select onchange="F.owner=this.value;render()"><option value="">Project owner</option>${allPeople().map(x=>`<option ${x===F.owner?'selected':''}>${x}</option>`).join('')}</select>
-   <select onchange="F.bu=this.value;render()"><option value="">BU</option>${uniq('bu').map(x=>`<option ${x===F.bu?'selected':''}>${x}</option>`).join('')}</select>
-   <select onchange="F.plant=this.value;render()"><option value="">Plant</option>${uniq('plant').map(x=>`<option ${x===F.plant?'selected':''}>${x}</option>`).join('')}</select>
-   <select onchange="F.supplier=this.value;render()"><option value="">Supplier</option>${[...new Set(projects.flatMap(p=>[p.cur,p.nw]))].map(x=>`<option ${x===F.supplier?'selected':''}>${x}</option>`).join('')}</select>
-   <select onchange="F.phase=this.value;render()"><option value="">Phase</option>${PHASES.map((x,i)=>`<option value="${i}" ${String(i)===F.phase?'selected':''}>${x}</option>`).join('')}</select>
+   <input placeholder="Project / part no." value="${escHtml(F.q)}" oninput="F.q=this.value;render()">
+   <select onchange="F.owner=this.value;render()"><option value="">Project owner</option>${allPeople().map(x=>`<option ${x===F.owner?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
+   <select onchange="F.bu=this.value;render()"><option value="">BU</option>${uniq('bu').map(x=>`<option ${x===F.bu?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
+   <select onchange="F.plant=this.value;render()"><option value="">Plant</option>${uniq('plant').map(x=>`<option ${x===F.plant?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
+   <select onchange="F.supplier=this.value;render()"><option value="">Supplier</option>${[...new Set(projects.flatMap(p=>[p.cur,p.nw]))].map(x=>`<option ${x===F.supplier?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
+   <select onchange="F.phase=this.value;render()"><option value="">Phase</option>${PHASES.map((x,i)=>`<option value="${i}" ${String(i)===F.phase?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
    <select onchange="F.status=this.value;render()"><option value="">Status</option>${['green','yellow','red','gray'].map(x=>`<option value="${x}" ${x===F.status?'selected':''}>${PSL[x]}</option>`).join('')}</select>
-   ${showActionFilters?`<select onchange="F.fn=this.value;render()"><option value="">Function</option>${FUNCTIONS.map(x=>`<option ${x===F.fn?'selected':''}>${x}</option>`).join('')}</select>
-   <select onchange="F.member=this.value;render()"><option value="">Team member</option>${allPeople().map(x=>`<option ${x===F.member?'selected':''}>${x}</option>`).join('')}</select>
+   ${showActionFilters?`<select onchange="F.fn=this.value;render()"><option value="">Function</option>${FUNCTIONS.map(x=>`<option ${x===F.fn?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
+   <select onchange="F.member=this.value;render()"><option value="">Team member</option>${allPeople().map(x=>`<option ${x===F.member?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
    <input type="date" value="${F.from}" onchange="F.from=this.value;render()" title="Due from"><input type="date" value="${F.to}" onchange="F.to=this.value;render()" title="Due to">`:''}
    <button class="chip ${F.overdue?'on':''}" onclick="F.overdue=!F.overdue;render()">Overdue only</button>
    <button class="clear" onclick="F={q:'',owner:'',bu:'',plant:'',supplier:'',fn:'',member:'',phase:'',status:'',from:'',to:'',overdue:false};render()">Clear</button>
@@ -225,18 +229,18 @@ function actionPass(a){
 /* Portfolio */
 function rPortfolio(){
   const list=filteredProjects();
-  const rows=list.map(p=>{const s=summary(p);return `<tr class="row" onclick="openProject('${p.id}')">
-   <td><b>${p.id}</b><br><span class="muted">${p.pn} · ${p.desc}</span></td>
-   <td>${p.plant}<br><span class="muted">${p.bu}</span></td>
+  const rows=list.map(p=>{const s=summary(p);return `<tr class="row" onclick="openProject('${escJs(p.id)}')">
+   <td><b>${escHtml(p.id)}</b><br><span class="muted">${escHtml(p.pn)} · ${escHtml(p.desc)}</span></td>
+   <td>${escHtml(p.plant)}<br><span class="muted">${escHtml(p.bu)}</span></td>
    <td>${railHtml(p,s.phase)}<div class="hint" style="margin-top:7px">${PHASES[s.phase]}</div></td>
    <td>${stTag(s.overall,PSL[s.overall])}</td>
    <td><span class="pct"><span class="bar"><i style="width:${s.pct}%"></i></span>${s.pct}%</span></td>
-   <td>${p.owner}</td>
+   <td>${escHtml(p.owner)}</td>
    <td class="num">${s.leadTotal} d${s.adjusted?`<span class="adj hint" style="display:block;line-height:1.5708em">${s.adjusted} adjusted</span>`:''}</td>
    <td>${fmt(s.target)}${s.undated?`<span class="hint" style="display:block;line-height:1.5708em">${s.undated} undated</span>`:''}</td>
-   <td>${s.next?`${s.next.tab}<br><span class="muted">${fmt(s.next.due)}</span>`:'<span class="muted">—</span>'}</td>
+   <td>${s.next?`${escHtml(s.next.tab)}<br><span class="muted">${fmt(s.next.due)}</span>`:'<span class="muted">—</span>'}</td>
    <td class="num">${s.red?`<span class="st red">${s.red}</span>`:'<span class="muted">0</span>'}</td>
-   ${isAdmin(me)?`<td><button class="link" style="font-size:12px;color:var(--r)" onclick="event.stopPropagation();deleteProject('${p.id}')">delete</button></td>`:''}</tr>`}).join('');
+   ${isAdmin(me)?`<td><button class="link" style="font-size:12px;color:var(--r)" onclick="event.stopPropagation();deleteProject('${escJs(p.id)}')">delete</button></td>`:''}</tr>`}).join('');
   return `<div class="head"><div><h1>Project portfolio</h1><div class="sub">${list.length} of ${projects.length} projects · phase rail shows the six phases from the process sheet, marker under the current one</div></div><div style="display:flex;gap:8px"><button class="btn secondary" onclick="downloadTemplate()">Import template</button><label class="btn secondary" style="cursor:pointer">⬆ Upload Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this.files[0]);this.value=''"></label><button class="btn secondary" onclick="exportPortfolio()">⬇ Export to Excel</button></div></div>
   ${filterBar(false)}
   <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Project</th><th>Plant / BU</th><th>Phase</th><th>Status</th><th>Complete</th><th>Project owner</th><th class="num">Lead time</th><th>Projected completion</th><th>Next milestone</th><th class="num">Overdue</th>${isAdmin(me)?'<th></th>':''}</tr></thead>
@@ -261,37 +265,37 @@ function rProject(){
   const pos=d=>Math.min(100,Math.max(0,100*(new Date(d)-first)/span));
   const ms=[1,2,3,4,5].map(i=>{const acts=p.actions.filter(x=>x.ph===i).map(x=>x.done||x.due).filter(Boolean).sort();return {n:PHASES[i].slice(3),d:acts.length?acts[acts.length-1]:d2s(p.created),st:phaseStatus(p,i)}});
   const rows=p.actions.map((a,i)=>{const st=aStatus(a);const adj=a.lead!==a.leadDefault;return (a.ph!==(p.actions[i-1]||{}).ph?`<tr><td colspan="11" style="padding:0"><div class="phasehead">${PHASES[a.ph]}${stTag(phaseStatus(p,a.ph),PSL[phaseStatus(p,a.ph)])}<span class="meta"><span>${p.actions.filter(x=>x.ph===a.ph&&x.done).length}/${p.actions.filter(x=>x.ph===a.ph).length} done</span><button class="btn secondary sm" onclick="openAddAction(${a.ph})">+ Add item</button></span></div></td></tr>`:'')+
-   `<tr><td><b>${a.tab}</b> · ${a.act}<br><span class="muted">${a.input}</span>${a.dep!==null&&byId(p,a.dep)?`<br><span class="hint">after ${byId(p,a.dep).tab}</span>`:''}${a.custom?`<br><span class="hint adj">added by ${a.creator||'—'}${a.createdOn?' on '+fmt(a.createdOn):''}</span>${(a.creator===me||isAdmin(me))?` · <button class="link" style="font-size:12px;color:var(--r)" onclick="deleteAction('${a.id}')">delete</button>`:''}`:''}</td>
-    <td>${inputField(i,a)}</td><td>${a.fn}</td><td>${a.owner}<br><span class="muted">${email(a.owner)}</span></td>
+   `<tr><td><b>${escHtml(a.tab)}</b> · ${escHtml(a.act)}<br><span class="muted">${escHtml(a.input)}</span>${a.dep!==null&&byId(p,a.dep)?`<br><span class="hint">after ${escHtml(byId(p,a.dep).tab)}</span>`:''}${a.custom?`<br><span class="hint adj">added by ${escHtml(a.creator||'—')}${a.createdOn?' on '+fmt(a.createdOn):''}</span>${(a.creator===me||isAdmin(me))?` · <button class="link" style="font-size:12px;color:var(--r)" onclick="deleteAction('${escJs(a.id)}')">delete</button>`:''}`:''}</td>
+    <td>${inputField(i,a)}</td><td>${escHtml(a.fn)}</td><td>${escHtml(a.owner)}<br><span class="muted">${escHtml(email(a.owner))}</span></td>
     <td class="num">${a.leadDefault===null?'<span class="hint">none in sheet</span>':a.leadDefault+' d'}</td>
     <td class="num"><input class="leadin" type="number" min="0" value="${a.lead===null?'':a.lead}" ${a.done?'disabled':''} onchange="setLead(${i},this.value)" style="${a.lead===null?'border-color:var(--r)':''}"> d${adj&&a.lead!==null?'<div class="adj hint">adjusted</div>':''}</td>
     <td><input type="date" value="${a.due}" ${a.done?'disabled':''} onchange="setDueDate(${i},this.value)" style="border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px;${!a.due?'border-color:var(--r)':''}"></td>
     <td>${a.done?fmt(a.done):'<span class="muted">—</span>'}</td><td>${stTag(st,stLabel(a))}</td>
-    <td><input value="${(a.comment||'').replace(/"/g,'&quot;')}" placeholder="Comment" onchange="setComment(${i},this.value)" style="width:150px;border:1px solid var(--line);border-radius:4px;padding:3px 6px;font-size:12px">${a.link?' <a href="#">doc</a>':''}</td>
-    <td style="white-space:nowrap">${a.done?'':`<button class="btn sm" onclick="openAction('${a.id}')">Complete</button> <button class="btn secondary sm" title="Send a reminder to ${a.owner} now" onclick="openRemind('${a.id}')">Remind</button>`}${a.lastRemind?`<div class="hint">previewed ${fmt(a.lastRemind)}</div>`:''}</td></tr>`}).join('');
+    <td><input value="${escHtml(a.comment||'')}" placeholder="Comment" onchange="setComment(${i},this.value)" style="width:150px;border:1px solid var(--line);border-radius:4px;padding:3px 6px;font-size:12px">${a.link?' <a href="#">doc</a>':''}</td>
+    <td style="white-space:nowrap">${a.done?'':`<button class="btn sm" onclick="openAction('${escJs(a.id)}')">Complete</button> <button class="btn secondary sm" title="Send a reminder to ${escHtml(a.owner)} now" onclick="openRemind('${escJs(a.id)}')">Remind</button>`}${a.lastRemind?`<div class="hint">previewed ${fmt(a.lastRemind)}</div>`:''}</td></tr>`}).join('');
   return `<button class="link" onclick="view='portfolio';render()">← Portfolio</button>
-  <div class="head" style="margin-top:8px"><div><h1>${p.id} · ${p.desc}</h1><div class="sub">${p.pn} · ${p.plant} · ${p.bu} · created ${fmt(d2s(p.created))}</div></div>
+  <div class="head" style="margin-top:8px"><div><h1>${escHtml(p.id)} · ${escHtml(p.desc)}</h1><div class="sub">${escHtml(p.pn)} · ${escHtml(p.plant)} · ${escHtml(p.bu)} · created ${fmt(d2s(p.created))}</div></div>
    <div style="display:flex;gap:8px;align-items:center">${stTag(s.overall,PSL[s.overall])}<button class="btn secondary" onclick="exportProject()">⬇ Export</button><button class="btn secondary" onclick="openAddAction(${s.phase})">+ Add item</button>${s.red?`<button class="btn" style="background:var(--r)" onclick="remindAllOverdue()">Remind all overdue (${s.red})</button>`:''}</div></div>
   <div class="grid c4" style="margin-bottom:14px">
    <div class="card kpi b"><b>${s.pct}%</b><span>complete · ${s.green} done · ${s.open} open</span></div>
    <div class="card kpi"><b>${PHASES[s.phase].slice(3)}</b><span>current phase</span></div>
    <div class="card kpi ${s.adjusted?'y':''}"><b>${s.leadTotal} d</b><span>overall lead time → ${fmt(s.target)}${s.adjusted?` · ${s.adjusted} timing${s.adjusted>1?'s':''} adjusted`:''}${s.undated?` · ${s.undated} without due date`:''}</span></div>
-   <div class="card kpi r"><b>${s.red}</b><span>overdue${s.next?` · next: ${s.next.tab} ${fmt(s.next.due)}`:''}</span></div>
+   <div class="card kpi r"><b>${s.red}</b><span>overdue${s.next?` · next: ${escHtml(s.next.tab)} ${fmt(s.next.due)}`:''}</span></div>
   </div>
   <div class="grid c2" style="margin-bottom:14px">
    <div class="card"><h2>Timeline</h2>
     <div class="timeline"><div class="track"></div><div class="today" style="left:${pos(TODAY)}%"><span>today</span></div>
     ${ms.map(m=>`<div class="ms" style="left:calc(${pos(m.d)}% - 7px);background:var(--${m.st==='gray'?'gr':m.st})"><span>${m.n}</span></div>`).join('')}</div>
     <div class="hint" style="margin-top:14px">Phase end milestones · ${fmt(d2s(p.created))} → projected ${fmt(s.target)}</div></div>
-   <div class="card"><h2>Red flags</h2>${flags.length?`<ul class="flags">${flags.map(a=>`<li><i class="dot red"></i><b>${-days(TODAY,a.due)} d late</b> — ${a.tab} · ${a.act} <span class="muted">(${a.owner})</span></li>`).join('')}</ul>`:'<div class="muted">No overdue actions.</div>'}
+   <div class="card"><h2>Red flags</h2>${flags.length?`<ul class="flags">${flags.map(a=>`<li><i class="dot red"></i><b>${-days(TODAY,a.due)} d late</b> — ${escHtml(a.tab)} · ${escHtml(a.act)} <span class="muted">(${escHtml(a.owner)})</span></li>`).join('')}</ul>`:'<div class="muted">No overdue actions.</div>'}
     ${s.undated?`<div class="hint" style="margin-top:8px">${s.undated} open action${s.undated>1?'s have':' has'} no due date — enter a lead time in the action plan so reminders can start.</div>`:''}</div>
   </div>
   <div class="phasehead">1. Tool Creation ${stTag('green','Complete')}<span class="meta"><span>Initiator inputs entered on ${fmt(d2s(p.created))}</span>${EDIT?`<button class="btn sm" onclick="saveEdit()">Save</button><button class="btn secondary sm" onclick="EDIT=false;render()">Cancel</button>`:`<button class="btn secondary sm" onclick="EDIT=true;render()">Edit</button>`}</span></div>
-  <div class="card" style="margin-bottom:6px">${EDIT?`<div class="masters">${INIT_FIELDS.map(([k,l])=>`<div><span>${l}</span><input id="ed_${k}" value="${String(p[k]||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px"></div>`).join('')}<div><span>BU (business unit)</span><input id="ed_bu" value="${p.bu||''}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px"></div></div>
-   <div class="team" style="margin-top:12px"><div><span>BU Buyer (Initiator)</span><select id="edt_${INITIATOR_FN.replace(/[^a-z]/gi,'')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px"><option value="">Assign</option>${(PEOPLE[INITIATOR_FN]||[]).map(n=>`<option ${p.team[INITIATOR_FN]===n?'selected':''}>${n}</option>`).join('')}</select></div>${TEAM_ROWS.map(([f,l])=>`<div><span>${l}${REQUIRED_TEAM.includes(f)?' <span class="req">*</span>':''}</span><select id="edt_${f.replace(/[^a-z]/gi,'')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px"><option value="">Assign</option>${(PEOPLE[f]||[]).map(n=>`<option ${p.team[f]===n?'selected':''}>${n}</option>`).join('')}</select></div>`).join('')}</div>
+  <div class="card" style="margin-bottom:6px">${EDIT?`<div class="masters">${INIT_FIELDS.map(([k,l])=>`<div><span>${l}</span><input id="ed_${k}" value="${escHtml(String(p[k]||''))}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px"></div>`).join('')}<div><span>BU (business unit)</span><input id="ed_bu" value="${escHtml(p.bu||'')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px"></div></div>
+   <div class="team" style="margin-top:12px"><div><span>BU Buyer (Initiator)</span><select id="edt_${INITIATOR_FN.replace(/[^a-z]/gi,'')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px"><option value="">Assign</option>${(PEOPLE[INITIATOR_FN]||[]).map(n=>`<option ${p.team[INITIATOR_FN]===n?'selected':''}>${escHtml(n)}</option>`).join('')}</select></div>${TEAM_ROWS.map(([f,l])=>`<div><span>${l}${REQUIRED_TEAM.includes(f)?' <span class="req">*</span>':''}</span><select id="edt_${f.replace(/[^a-z]/gi,'')}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px"><option value="">Assign</option>${(PEOPLE[f]||[]).map(n=>`<option ${p.team[f]===n?'selected':''}>${escHtml(n)}</option>`).join('')}</select></div>`).join('')}</div>
    <div class="hint" style="margin-top:8px">Changing a team member reassigns all of that function's open actions to the new person (completed actions keep their original owner).</div>`
-  :`<div class="masters">${INIT_FIELDS.map(([k,l])=>`<div><span>${l}</span>${p[k]||'<span class="muted">—</span>'}</div>`).join('')}</div>
-   <div class="team" style="margin-top:12px"><div><span>BU Buyer (Initiator)</span>${p.team['BU Buyer']}<br><span>${email(p.team['BU Buyer'])}</span></div>${TEAM_ROWS.map(([f,l])=>`<div><span>${l}</span>${p.team[f]||'<span class="req">not assigned</span>'}<br><span>${email(p.team[f])}</span></div>`).join('')}</div>`}</div>
+  :`<div class="masters">${INIT_FIELDS.map(([k,l])=>`<div><span>${l}</span>${p[k]?escHtml(p[k]):'<span class="muted">—</span>'}</div>`).join('')}</div>
+   <div class="team" style="margin-top:12px"><div><span>BU Buyer (Initiator)</span>${escHtml(p.team['BU Buyer'])}<br><span>${escHtml(email(p.team['BU Buyer']))}</span></div>${TEAM_ROWS.map(([f,l])=>`<div><span>${l}</span>${p.team[f]?escHtml(p.team[f]):'<span class="req">not assigned</span>'}<br><span>${escHtml(email(p.team[f]))}</span></div>`).join('')}</div>`}</div>
   <div class="card" style="padding:0 0 4px;overflow:auto"><table><thead><tr><th>Tab · Action</th><th>Required input</th><th>Function</th><th>Owner</th><th class="num">Default</th><th class="num">Adjusted</th><th>Due</th><th>Completed</th><th>Status</th><th>Comment</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   <div class="hint" style="margin-top:14px">Anything else worth tracking on this project — a blocker, a supplier follow-up, a decision — is added as an item to the relevant step with "+ Add item", so it gets an owner, a due date and reminders like every other action.</div>`;
 }
@@ -302,9 +306,9 @@ function insertAction(o){
 }
 function inputField(i,a){
   const st='border:1px solid var(--line);border-radius:4px;padding:4px 6px;font-size:12px;width:150px;'+(a.value?'background:var(--g-soft);border-color:var(--g);font-weight:600':'');
-  if(a.input.includes(' / ')) return `<select onchange="setValue(${i},this.value)" style="${st}"><option value="">${a.input}</option>${a.input.split(' / ').map(o=>`<option ${a.value===o?'selected':''}>${o}</option>`).join('')}</select>`;
+  if(a.input.includes(' / ')) return `<select onchange="setValue(${i},this.value)" style="${st}"><option value="">${escHtml(a.input)}</option>${a.input.split(' / ').map(o=>`<option ${a.value===o?'selected':''}>${escHtml(o)}</option>`).join('')}</select>`;
   const isDate=/date/i.test(a.input);
-  return `<input type="${isDate?'date':'text'}" value="${(a.value||'').replace(/"/g,'&quot;')}" placeholder="${a.input}" onchange="setValue(${i},this.value)" style="${st}">`;
+  return `<input type="${isDate?'date':'text'}" value="${escHtml(a.value||'')}" placeholder="${escHtml(a.input)}" onchange="setValue(${i},this.value)" style="${st}">`;
 }
 function setValue(i,val){
   const a=current.actions[i]; a.value=val.trim();
@@ -337,11 +341,11 @@ function myActions(){return projects.flatMap(p=>p.actions.filter(a=>a.owner===me
 function rMine(){
   const list=myActions().filter(x=>actionPass(x.a)).sort((x,y)=>(x.a.done?1:0)-(y.a.done?1:0)||((x.a.due||'9')<(y.a.due||'9')?-1:1));
   const openN=list.filter(x=>!x.a.done).length;
-  return `<div class="head"><div><h1>My actions</h1><div class="sub">${me} · ${openN} open · ${list.filter(x=>aStatus(x.a)==='red').length} overdue</div></div></div>
+  return `<div class="head"><div><h1>My actions</h1><div class="sub">${escHtml(me)} · ${openN} open · ${list.filter(x=>aStatus(x.a)==='red').length} overdue</div></div></div>
   ${filterBar(true)}
   <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Project</th><th>Required action</th><th>Required input</th><th>Due</th><th>Status</th><th class="num">Days</th><th></th></tr></thead><tbody>
-  ${list.map(({p,a})=>{const st=aStatus(a),dl=a.due?days(TODAY,a.due):0;return `<tr><td><b>${p.id}</b><br><span class="muted">${p.desc}</span></td><td><b>${a.tab}</b> · ${a.act}<br><span class="muted">${PHASES[a.ph]}</span></td><td>${a.value?'<b>'+a.value+'</b>':a.input}</td><td>${a.due?fmt(a.due):'<span class="hint">not scheduled</span>'}${!a.done&&a.due?`<div class="hint">next reminder ${nextReminder(a)}</div>`:''}</td><td>${stTag(st,stLabel(a))}</td>
-   <td class="num" style="color:${a.due&&dl<0?'var(--r)':'inherit'}">${a.done||!a.due?'—':dl<0?`${-dl} overdue`:`${dl} left`}</td><td>${a.done?'':`<button class="btn sm" onclick="openAction('${a.id}')">Enter &amp; complete</button>`}</td></tr>`}).join('')||`<tr><td colspan="7" class="empty">Nothing assigned to you.</td></tr>`}</tbody></table></div>`;
+  ${list.map(({p,a})=>{const st=aStatus(a),dl=a.due?days(TODAY,a.due):0;return `<tr><td><b>${escHtml(p.id)}</b><br><span class="muted">${escHtml(p.desc)}</span></td><td><b>${escHtml(a.tab)}</b> · ${escHtml(a.act)}<br><span class="muted">${PHASES[a.ph]}</span></td><td>${a.value?'<b>'+escHtml(a.value)+'</b>':escHtml(a.input)}</td><td>${a.due?fmt(a.due):'<span class="hint">not scheduled</span>'}${!a.done&&a.due?`<div class="hint">next reminder ${nextReminder(a)}</div>`:''}</td><td>${stTag(st,stLabel(a))}</td>
+   <td class="num" style="color:${a.due&&dl<0?'var(--r)':'inherit'}">${a.done||!a.due?'—':dl<0?`${-dl} overdue`:`${dl} left`}</td><td>${a.done?'':`<button class="btn sm" onclick="openAction('${escJs(a.id)}')">Enter &amp; complete</button>`}</td></tr>`}).join('')||`<tr><td colspan="7" class="empty">Nothing assigned to you.</td></tr>`}</tbody></table></div>`;
 }
 
 /* Management */
@@ -355,7 +359,7 @@ function rMgmt(){
   const byFn=agg('fn'),byOwner=agg('owner');
   const byPhase=PHASES.slice(1).map((n,j)=>{const i=j+1;return [n,list.reduce((c,p)=>c+p.actions.filter(a=>a.ph===i&&aStatus(a)==='red').length,0),S.filter(x=>x.s.phase===i&&x.s.pct<100).length]});
   const max=Math.max(1,...byFn.map(x=>x[1]),...byOwner.map(x=>x[1]),...byProj.map(x=>x.s.red),...byPhase.map(x=>x[1]));
-  const hb=(l,n,sub)=>`<div class="hbar"><span>${l}${sub?`<br><span class="hint">${sub}</span>`:''}</span><span class="b" style="width:${100*n/max}%"></span><span class="n">${n}</span></div>`;
+  const hb=(l,n,sub)=>`<div class="hbar"><span>${escHtml(l)}${sub?`<br><span class="hint">${escHtml(sub)}</span>`:''}</span><span class="b" style="width:${100*n/max}%"></span><span class="n">${n}</span></div>`;
   return `<div class="head"><div><h1>Management view</h1><div class="sub">Where the portfolio is stuck, by project, function, owner and phase</div></div></div>
   ${filterBar(false)}
   <div class="grid c4" style="margin-bottom:14px">
@@ -405,9 +409,9 @@ function rSettings(){
     <div class="rule"><span>Channel <span class="hint">(Outlook mail to the owner's address, Teams chat via the Flow bot, or both)</span></span><span><select data-plain onchange="RULES.channel=this.value;render()" style="border:1px solid var(--line);border-radius:4px;padding:4px">${Object.entries(CH).map(([k,v])=>`<option value="${k}" ${RULES.channel===k?'selected':''}>${v}</option>`).join('')}</select></span></div>
     <div class="note" style="margin-top:14px">How it runs in production: a Power Automate flow runs every morning, reads every open action, applies these rules and sends an Outlook mail and/or a Teams chat message to the owner's address; the assignment message goes out the moment a plan is generated or an item is added. Nothing is sent from this prototype — the list on the right shows exactly what today's run would send. Actions without a due date are not reminded.</div></div>
    <div class="card"><h2>Automatic reminder preview · ${fmt(d2s(TODAY))} · ${mails.length} message${mails.length===1?'':'s'}</h2>
-    ${mails.map(m=>`<div class="mail ${m.k}"><b>${m.s}</b><div class="to">${CH[RULES.channel]} → ${m.to} &lt;${email(m.to)}&gt;${m.cc?` · Cc: ${m.cc} (project owner)`:''}</div><div class="hint">Message contains a direct link to complete the action in My Actions.</div></div>`).join('')||'<div class="muted">No reminders fall on today\'s date with the current rules.</div>'}
+    ${mails.map(m=>`<div class="mail ${m.k}"><b>${escHtml(m.s)}</b><div class="to">${CH[RULES.channel]} → ${escHtml(m.to)} &lt;${escHtml(email(m.to))}&gt;${m.cc?` · Cc: ${escHtml(m.cc)} (project owner)`:''}</div><div class="hint">Message contains a direct link to complete the action in My Actions.</div></div>`).join('')||'<div class="muted">No reminders fall on today\'s date with the current rules.</div>'}
     <h2 style="margin-top:16px">Manual reminder previews today (${MANUAL.filter(m=>m.ts===d2s(TODAY)).length})</h2>
-    ${MANUAL.filter(m=>m.ts===d2s(TODAY)).map(m=>`<div class="mail assign"><b>${m.a.tab} · ${m.a.act} (${m.p.id})</b><div class="to">${CH[RULES.channel]} → ${m.to} &lt;${email(m.to)}&gt;${m.cc?` · Cc: ${m.cc}`:''} · previewed by ${m.by}</div></div>`).join('')||'<div class="muted">None yet — use "Remind" on any open action in a project, or "Remind all overdue" in the project header.</div>'}
+    ${MANUAL.filter(m=>m.ts===d2s(TODAY)).map(m=>`<div class="mail assign"><b>${escHtml(m.a.tab)} · ${escHtml(m.a.act)} (${escHtml(m.p.id)})</b><div class="to">${CH[RULES.channel]} → ${escHtml(m.to)} &lt;${escHtml(email(m.to))}&gt;${m.cc?` · Cc: ${escHtml(m.cc)}`:''} · previewed by ${escHtml(m.by)}</div></div>`).join('')||'<div class="muted">None yet — use "Remind" on any open action in a project, or "Remind all overdue" in the project header.</div>'}
     <h2 style="margin-top:16px">Upcoming automatic (next 7 days)</h2>
     ${[1,2,3,4,5,6,7].map(n=>{const d=addDays(TODAY,n);const ms=remindersOn(d);return ms.length?`<div class="hbar" style="grid-template-columns:110px 1fr"><span>${fmt(d2s(d))}</span><span class="hint">${ms.length} message${ms.length===1?'':'s'} · ${ms.filter(x=>x.k==='esc').length} escalation${ms.filter(x=>x.k==='esc').length===1?'':'s'}</span></div>`:''}).join('')||'<div class="muted">Nothing scheduled.</div>'}</div>
   </div>`;
@@ -419,8 +423,8 @@ function openAction(id){
   for(const p of projects){const a=p.actions.find(x=>x.id===id);if(a){actTarget={p,a};break;}}
   const {p,a}=actTarget;
   const isChoice=a.input.includes(' / '), isDate=a.input==='Date';
-  document.getElementById('actBody').innerHTML=`<h2>${a.tab} · ${a.act}</h2><div class="sub" style="margin-bottom:14px">${p.id} · ${PHASES[a.ph]} · owner ${a.owner} · ${a.due?'due '+fmt(a.due):'no due date set'}</div>
-   <div class="field"><label>${a.input} <span class="req">*</span></label>${isChoice?`<select id="aVal"><option value="">Select</option>${a.input.split(' / ').map(o=>`<option>${o}</option>`).join('')}</select>`:`<input id="aVal" type="${isDate?'date':'text'}" placeholder="Required to close this action">`}</div>
+  document.getElementById('actBody').innerHTML=`<h2>${escHtml(a.tab)} · ${escHtml(a.act)}</h2><div class="sub" style="margin-bottom:14px">${escHtml(p.id)} · ${PHASES[a.ph]} · owner ${escHtml(a.owner)} · ${a.due?'due '+fmt(a.due):'no due date set'}</div>
+   <div class="field"><label>${escHtml(a.input)} <span class="req">*</span></label>${isChoice?`<select id="aVal"><option value="">Select</option>${a.input.split(' / ').map(o=>`<option>${escHtml(o)}</option>`).join('')}</select>`:`<input id="aVal" type="${isDate?'date':'text'}" placeholder="Required to close this action">`}</div>
    <div class="f2"><div class="field"><label>Actual completion date <span class="req">*</span></label><input id="aDate" type="date" value="${d2s(TODAY)}"></div>
    <div class="field"><label>Supporting document / link</label><input id="aLink" placeholder="SharePoint / Windchill link (optional)"></div></div>
    <div class="field"><label>Comment</label><textarea id="aCom" rows="2"></textarea></div>
@@ -441,10 +445,10 @@ function openRemind(id){
   for(const p of projects){const a=p.actions.find(x=>x.id===id);if(a){actTarget={p,a};break;}}
   const {p,a}=actTarget; const dl=a.due?days(TODAY,a.due):null;
   const esc=dl!==null&&dl<0&&-dl>=RULES.escalateAfter;
-  document.getElementById('actBody').innerHTML=`<h2>Remind ${a.owner}</h2><div class="sub" style="margin-bottom:14px">${p.id} · ${a.tab} · ${a.act} · ${a.due?(dl<0?`<span style="color:var(--r)">${-dl} days overdue</span>`:`due ${fmt(a.due)}`):'no due date'}</div>
-   <div class="note">${CH[RULES.channel]} → ${a.owner} &lt;${email(a.owner)}&gt;${a.lastRemind?` · last manual reminder ${fmt(a.lastRemind)}`:''}</div>
-   <div class="field"><label>Message</label><textarea id="rmMsg" rows="4">Hi ${a.owner.split(' ')[0]}, quick reminder on ${p.id} (${p.desc}): "${a.act}" ${a.due?(dl<0?`was due ${fmt(a.due)}`:`is due ${fmt(a.due)}`):'has no due date yet'}. Please enter the ${a.input} in the dashboard. Thanks, ${me}</textarea></div>
-   <div class="field"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rmCc" style="width:auto" ${esc?'checked':''}> Copy project owner (${p.owner})</label></div>
+  document.getElementById('actBody').innerHTML=`<h2>Remind ${escHtml(a.owner)}</h2><div class="sub" style="margin-bottom:14px">${escHtml(p.id)} · ${escHtml(a.tab)} · ${escHtml(a.act)} · ${a.due?(dl<0?`<span style="color:var(--r)">${-dl} days overdue</span>`:`due ${fmt(a.due)}`):'no due date'}</div>
+   <div class="note">${CH[RULES.channel]} → ${escHtml(a.owner)} &lt;${escHtml(email(a.owner))}&gt;${a.lastRemind?` · last manual reminder ${fmt(a.lastRemind)}`:''}</div>
+   <div class="field"><label>Message</label><textarea id="rmMsg" rows="4">Hi ${escHtml(a.owner.split(' ')[0])}, quick reminder on ${escHtml(p.id)} (${escHtml(p.desc)}): "${escHtml(a.act)}" ${a.due?(dl<0?`was due ${fmt(a.due)}`:`is due ${fmt(a.due)}`):'has no due date yet'}. Please enter the ${escHtml(a.input)} in the dashboard. Thanks, ${escHtml(me)}</textarea></div>
+   <div class="field"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rmCc" style="width:auto" ${esc?'checked':''}> Copy project owner (${escHtml(p.owner)})</label></div>
    <div class="mfoot"><span class="hint">Preview only — no email or Teams message will be sent.</span><span><button class="btn secondary" onclick="closeM('act')">Cancel</button> <button class="btn" onclick="sendRemind()">Preview reminder</button></span></div>`;
   document.getElementById('act').classList.add('open'); enhanceSelects(document.getElementById('actBody'));
 }
@@ -464,16 +468,16 @@ function remindAllOverdue(){
 /* ---------- add item to a phase (per project, optionally to the standard template) ---------- */
 function openAddAction(ph){
   const p=current;
-  const fnSel=`<select id="naFn" onchange="document.getElementById('naOwner').value=(current.team[this.value]||'')">${FUNCTIONS.map(f=>`<option ${f==='SP/BU'?'selected':''}>${f}</option>`).join('')}</select>`;
-  document.getElementById('actBody').innerHTML=`<h2>Add item</h2><div class="sub" style="margin-bottom:14px">${p.id} · new action added to the project's action plan</div>
+  const fnSel=`<select id="naFn" onchange="document.getElementById('naOwner').value=(current.team[this.value]||'')">${FUNCTIONS.map(f=>`<option ${f==='SP/BU'?'selected':''}>${escHtml(f)}</option>`).join('')}</select>`;
+  document.getElementById('actBody').innerHTML=`<h2>Add item</h2><div class="sub" style="margin-bottom:14px">${escHtml(p.id)} · new action added to the project's action plan</div>
    <div class="f2"><div class="field"><label>Step / phase <span class="req">*</span></label><select id="naPh">${PHASES.map((n,i)=>`<option value="${i}" ${i===ph?'selected':''}>${n}</option>`).join('')}</select></div>
    <div class="field"><label>Tab (short name) <span class="req">*</span></label><input id="naTab" placeholder="e.g. Tool insurance"></div></div>
    <div class="field"><label>Action <span class="req">*</span></label><input id="naAct" placeholder="What has to be done"></div>
    <div class="f3"><div class="field"><label>Required input</label><input id="naIn" placeholder="e.g. Date / Reference / Yes / No"></div>
    <div class="field"><label>Function</label>${fnSel}</div>
-   <div class="field"><label>Owner</label><input id="naOwner" value="${p.team['SP/BU']||''}"></div></div>
+   <div class="field"><label>Owner</label><input id="naOwner" value="${escHtml(p.team['SP/BU']||'')}"></div></div>
    <div class="f3"><div class="field"><label>Lead time (days)</label><input id="naLead" type="number" min="0" placeholder="blank = no due date"></div>
-   <div class="field"><label>Counted from</label><select id="naDep"><option value="">Project creation</option>${p.actions.map(a=>`<option value="${a.id}">${a.tab} · ${a.act.slice(0,40)}</option>`).join('')}</select></div>
+   <div class="field"><label>Counted from</label><select id="naDep"><option value="">Project creation</option>${p.actions.map(a=>`<option value="${escHtml(a.id)}">${escHtml(a.tab)} · ${escHtml(a.act.slice(0,40))}</option>`).join('')}</select></div>
    <div class="field"><label>Comment</label><input id="naCom"></div></div>
    <div class="field"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="naTpl" style="width:auto"> Also add to the standard template for all future projects</label></div>
    <div class="mfoot"><span class="hint">Assignment preview only. No email or Teams message is sent.</span><span><button class="btn secondary" onclick="closeM('act')">Cancel</button> <button class="btn" onclick="addAction()">Add item</button></span></div>`;
@@ -498,7 +502,7 @@ function openWizard(){W={step:0,d:{},team:{}};document.getElementById('wiz').cla
 function rWiz(){
   const b=document.getElementById('wizBody'); setTimeout(()=>enhanceSelects(b),0);
   const steps=`<div class="steps">${[0,1,2].map(i=>`<span class="${i<=W.step?'done':''}"></span>`).join('')}</div>`;
-  const inp=(k,l,req,type='text')=>`<div class="field"><label>${l}${req?' <span class="req">*</span>':''}</label><input type="${type}" value="${W.d[k]||''}" oninput="W.d['${k}']=this.value"></div>`;
+  const inp=(k,l,req,type='text')=>`<div class="field"><label>${l}${req?' <span class="req">*</span>':''}</label><input type="${type}" value="${escHtml(W.d[k]||'')}" oninput="W.d['${k}']=this.value"></div>`;
   if(W.step===0) b.innerHTML=`<h2>New project · 1 of 3 · Tool Creation — Initiator inputs</h2>${steps}
     <div class="f3">${inp('pn','Part Number',1)}${inp('desc','Part Description',1)}${inp('plant','Plant affected',1)}
     ${inp('bu','BU (business unit)',1)}<div class="field"><label>Reason <span class="req">*</span></label><select onchange="W.d.reason=this.value"><option value="">Select</option>${['Tool end of life','Supplier exit','Capacity increase','Cost reduction','Localization','Quality issue','Engineering change'].map(r=>`<option ${W.d.reason===r?'selected':''}>${r}</option>`).join('')}</select></div>${inp('cur','Current Supplier',1)}
@@ -506,12 +510,12 @@ function rWiz(){
     <div class="field"><label>Project creation date</label><input value="${fmt(d2s(TODAY))}" disabled></div></div>
     <div class="mfoot"><span></span><span><button class="btn secondary" onclick="closeM('wiz')">Cancel</button> <button class="btn" onclick="wizNext()">Next: team</button></span></div>`;
   if(W.step===1) b.innerHTML=`<h2>New project · 2 of 3 · Tool Creation — Team</h2>${steps}<div class="note">Assigning a person to a function maps every standard action of that function to them. The plan is generated as soon as all mandatory roles are filled.</div>
-    <div class="f3"><div class="field"><label>BU Buyer (Initiator)</label><input value="${me}" disabled><span class="hint">${email(me)}</span></div>${TEAM_ROWS.map(([f,l])=>`<div class="field"><label>${l} ${REQUIRED_TEAM.includes(f)?'<span class="req">*</span>':''}</label><select onchange="W.team['${f}']=this.value;rWiz()"><option value="">Assign</option>${PEOPLE[f].map(n=>`<option ${W.team[f]===n?'selected':''}>${n}</option>`).join('')}</select><span class="hint">${W.team[f]?email(W.team[f]):'&nbsp;'}</span></div>`).join('')}</div>
+    <div class="f3"><div class="field"><label>BU Buyer (Initiator)</label><input value="${escHtml(me)}" disabled><span class="hint">${escHtml(email(me))}</span></div>${TEAM_ROWS.map(([f,l])=>`<div class="field"><label>${l} ${REQUIRED_TEAM.includes(f)?'<span class="req">*</span>':''}</label><select onchange="W.team['${escJs(f)}']=this.value;rWiz()"><option value="">Assign</option>${PEOPLE[f].map(n=>`<option ${W.team[f]===n?'selected':''}>${escHtml(n)}</option>`).join('')}</select><span class="hint">${W.team[f]?escHtml(email(W.team[f])):'&nbsp;'}</span></div>`).join('')}</div>
     <div class="mfoot"><button class="btn secondary" onclick="W.step=0;rWiz()">Back</button><button class="btn" onclick="wizNext()">Generate action plan</button></div>`;
   if(W.step===2){
     const tmp={id:'NEW',created:TODAY,team:W.team}; tmp.actions=buildActions(tmp); schedule(tmp); const acts=tmp.actions, ss=summary(tmp);
     b.innerHTML=`<h2>New project · 3 of 3 · Generated action plan</h2>${steps}<div class="note">${acts.length} actions generated from the standard template with default lead times · overall lead time ${ss.leadTotal} days · projected completion <b>${fmt(ss.target)}</b>. ${ss.undated} action${ss.undated>1?'s have':' has'} no default lead time in the process sheet; set them in the project view.</div>
-    <table>${acts.map((a,i)=>(i===0||acts[i-1].ph!==a.ph?`<tr><td colspan="5" class="bold" style="background:var(--panel)">${PHASES[a.ph]}</td></tr>`:'')+`<tr><td><b>${a.tab}</b> · ${a.act}</td><td class="muted">${a.fn}</td><td>${a.owner||'<span class="req">unassigned</span>'}</td><td class="num">${a.lead===null?'<span class="hint">—</span>':a.lead+' d'}</td><td>${a.due?fmt(a.due):'<span class="hint">set later</span>'}</td></tr>`).join('')}</table>
+    <table>${acts.map((a,i)=>(i===0||acts[i-1].ph!==a.ph?`<tr><td colspan="5" class="bold" style="background:var(--panel)">${PHASES[a.ph]}</td></tr>`:'')+`<tr><td><b>${escHtml(a.tab)}</b> · ${escHtml(a.act)}</td><td class="muted">${escHtml(a.fn)}</td><td>${a.owner?escHtml(a.owner):'<span class="req">unassigned</span>'}</td><td class="num">${a.lead===null?'<span class="hint">—</span>':a.lead+' d'}</td><td>${a.due?fmt(a.due):'<span class="hint">set later</span>'}</td></tr>`).join('')}</table>
     <div class="mfoot"><button class="btn secondary" onclick="W.step=1;rWiz()">Back</button><button class="btn" onclick="createProject()">Create project</button></div>`;
   }
 }
@@ -541,15 +545,15 @@ function rAdmin(){
   <div class="grid c2">
    <div class="card"><h2>People</h2>
     <table><thead><tr><th>Name</th><th>Function</th><th>Email</th><th>Dashboard admin</th><th></th></tr></thead><tbody>
-    ${FUNCTIONS.flatMap(f=>(PEOPLE[f]||[]).map(n=>`<tr><td>${n}</td><td>${f}</td><td class="muted">${email(n)}</td><td><input type="checkbox" ${isAdmin(n)?'checked':''} onchange="toggleAdmin('${n}',this.checked)"></td><td><button class="link" style="font-size:12px" onclick="removePerson('${f}','${n}')">remove</button></td></tr>`)).join('')}
+    ${FUNCTIONS.flatMap(f=>(PEOPLE[f]||[]).map(n=>`<tr><td>${escHtml(n)}</td><td>${escHtml(f)}</td><td class="muted">${escHtml(email(n))}</td><td><input type="checkbox" ${isAdmin(n)?'checked':''} onchange="toggleAdmin('${escJs(n)}',this.checked)"></td><td><button class="link" style="font-size:12px" onclick="removePerson('${escJs(f)}','${escJs(n)}')">remove</button></td></tr>`)).join('')}
     <tr><td><input id="apN" placeholder="Full name" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td>
-    <td><select id="apF" style="border:1px solid var(--line);border-radius:4px;padding:5px">${FUNCTIONS.map(f=>`<option>${f}</option>`).join('')}</select></td>
+    <td><select id="apF" style="border:1px solid var(--line);border-radius:4px;padding:5px">${FUNCTIONS.map(f=>`<option>${escHtml(f)}</option>`).join('')}</select></td>
     <td><input id="apE" placeholder="email (optional)" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td>
     <td></td><td><button class="btn sm" onclick="addPerson()">Add</button></td></tr></tbody></table>
     <div class="hint" style="margin-top:8px">Dashboard admins can delete projects and any added action item; other users can only delete items they created themselves. Removing a person does not change existing projects — reassign owners in the project first.</div></div>
    <div class="card"><h2>Functions</h2>
     <table><thead><tr><th>Function (editable)</th><th>Team-setup label (editable)</th><th>Mandatory</th><th class="num">Template actions</th></tr></thead><tbody>
-    ${FUNCTIONS.map((f,i)=>{const tr=TEAM_ROWS.find(t=>t[0]===f);const used=MATRIX.filter(m=>m.fn===f).length;const st='border:1px solid var(--line);border-radius:4px;padding:4px 6px;width:100%';return `<tr><td><input value="${f}" onchange="renameFunction(${i},this.value)" style="${st};font-weight:600"></td><td>${f===INITIATOR_FN?'<span class="muted">Initiator (fills automatically)</span>':`<input value="${tr?tr[1]:''}" placeholder="label in team setup" onchange="setFnLabel('${f}',this.value)" style="${st}">`}</td><td>${f===INITIATOR_FN?'—':`<input type="checkbox" ${REQUIRED_TEAM.includes(f)?'checked':''} onchange="toggleRequired('${f}',this.checked)">`}</td><td class="num">${used}${f!==INITIATOR_FN&&!used&&!(PEOPLE[f]||[]).length?` <button class="link" style="font-size:12px" onclick="deleteFunction('${f}')">delete</button>`:''}</td></tr>`}).join('')}
+    ${FUNCTIONS.map((f,i)=>{const tr=TEAM_ROWS.find(t=>t[0]===f);const used=MATRIX.filter(m=>m.fn===f).length;const st='border:1px solid var(--line);border-radius:4px;padding:4px 6px;width:100%';return `<tr><td><input value="${escHtml(f)}" onchange="renameFunction(${i},this.value)" style="${st};font-weight:600"></td><td>${f===INITIATOR_FN?'<span class="muted">Initiator (fills automatically)</span>':`<input value="${escHtml(tr?tr[1]:'')}" placeholder="label in team setup" onchange="setFnLabel('${escJs(f)}',this.value)" style="${st}">`}</td><td>${f===INITIATOR_FN?'—':`<input type="checkbox" ${REQUIRED_TEAM.includes(f)?'checked':''} onchange="toggleRequired('${escJs(f)}',this.checked)">`}</td><td class="num">${used}${f!==INITIATOR_FN&&!used&&!(PEOPLE[f]||[]).length?` <button class="link" style="font-size:12px" onclick="deleteFunction('${escJs(f)}')">delete</button>`:''}</td></tr>`}).join('')}
     <tr><td><input id="afN" placeholder="e.g. Quality" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td><td><input id="afL" placeholder="label in team setup" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 7px"></td><td><input type="checkbox" id="afR"></td><td><button class="btn sm" onclick="addFunction()">Add</button></td></tr></tbody></table>
     <div class="hint" style="margin-top:8px">Edit a name or label directly in the row. Renaming a function updates the template, the people list and every project's team and actions. A function can only be deleted when no template action and no person uses it.</div></div>
   </div>`;
