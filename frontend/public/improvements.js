@@ -95,6 +95,22 @@ function layoutTimeline() {
     span.style.cssText = "";
   timeline.style.height = "";
   const inner = timeline.getBoundingClientRect();
+
+  // 第一步：先把贴边标签内收到位。若先分层后内收，内收产生的水平位移
+  // 不会参与碰撞判定，同层标签会在内收后叠字（右侧 100% 标签最易触发）。
+  for (const span of spans) {
+    const rect = span.getBoundingClientRect();
+    if (rect.left < inner.left - 1) {
+      span.style.left = "7px";
+      span.style.transform = "none";
+    } else if (rect.right > inner.right + 1) {
+      span.style.left = "auto";
+      span.style.right = "7px";
+      span.style.transform = "none";
+    }
+  }
+
+  // 第二步：在最终水平坐标上重新测量并分层，冲突的逐层下移。
   const placed = [];
   let maxLane = 0;
   spans
@@ -113,14 +129,6 @@ function layoutTimeline() {
       maxLane = Math.max(maxLane, lane);
       placed.push({ lane, left: rect.left, right: rect.right });
       if (lane) span.style.top = `${18 + lane * 17}px`;
-      if (rect.left < inner.left - 1) {
-        span.style.left = "7px";
-        span.style.transform = "none";
-      } else if (rect.right > inner.right + 1) {
-        span.style.left = "auto";
-        span.style.right = "7px";
-        span.style.transform = "none";
-      }
     });
   if (maxLane) timeline.style.height = `${18 + (maxLane + 1) * 17 + 16}px`;
 }
