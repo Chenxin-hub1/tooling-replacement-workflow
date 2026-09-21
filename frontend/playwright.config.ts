@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
-const e2ePort = process.env.E2E_PORT ?? "8001";
+// Default 8011: port 8001 is permanently taken by another local container.
+const e2ePort = process.env.E2E_PORT ?? "8011";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
