@@ -12,10 +12,10 @@ from app.models.action import ProjectAction
 
 
 def test_standard_matrix_definition():
-    # Verify standard matrix has 31 items across phases 1 to 5
-    assert len(STANDARD_MATRIX) == 31
+    # Verify standard matrix has 20 items across phases 1 to 3
+    assert len(STANDARD_MATRIX) == 20
     phases = {m["ph"] for m in STANDARD_MATRIX}
-    assert phases == {1, 2, 3, 4, 5}
+    assert phases == {1, 2, 3}
 
 
 def test_build_actions_for_project():
@@ -29,7 +29,7 @@ def test_build_actions_for_project():
         "Accounting": "Julia Lang",
     }
     actions = build_actions_for_project(project_id, team)
-    assert len(actions) == 31
+    assert len(actions) == 20
     assert actions[0].project_id == project_id
     assert actions[0].id == "TR-2026-001-0"
     assert actions[0].fn == "SDE"
@@ -178,7 +178,7 @@ def test_compute_project_summary():
     # Action 0 (due 2026-09-08) is overdue on 2026-09-15
     summary = compute_project_summary(project_created, actions, today)
 
-    assert summary.total_actions == 31
+    assert summary.total_actions == 20
     assert summary.overdue_actions > 0
     assert summary.overall_status == "red"  # Has overdue action
     assert len(summary.red_flags) > 0

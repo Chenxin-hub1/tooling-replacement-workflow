@@ -7,16 +7,14 @@ from app.models.action import ProjectAction
 from app.schemas.common import Health, PhaseState
 from app.schemas.project import PhaseSummary, ProjectSummary
 
-# Standard Matrix Definition (31 items across Phases 1 to 5)
+# Standard Matrix Definition (20 items across Phases 1 to 3)
 # Phase 0 ('1. Tool Creation') is closed upon project creation.
 # Phase 1 ('2. Development')
-# Phase 2 ('3. Internal Approval')
+# Phase 2 ('3. Interim Approval')
 # Phase 3 ('4. Customer Approval')
-# Phase 4 ('5. Scrap')
-# Phase 5 ('6. Archive')
 
 
-class StandardAction(TypedDict):
+class StandardActionRequired(TypedDict):
     ph: int
     tab: str
     act: str
@@ -24,6 +22,30 @@ class StandardAction(TypedDict):
     fn: str
     lead: int | None
     dep: int | None
+
+
+class StandardAction(StandardActionRequired, total=False):
+    # v2 Phase-1 凭证状态（评审反馈 B1/B2/B3/B7）：status_input 标记该动作带状态
+    # （值为别名组 id：CR / BPW / STANDARD），closes_on 限定只有这些选项计完成。
+    status_input: str
+    closes_on: list[str]
+    # v2 Phase-2 日期历史（评审反馈 B4/B5/B8）：原始/当前双日期动作。
+    dual_date: bool
+
+
+STATUS_VALUES = ("initiated", "in_progress", "approved")
+STATUS_ALIAS_SETS: dict[str, dict[str, str]] = {
+    "CR": {
+        "initiated": "Created",
+        "in_progress": "Under Review",
+        "approved": "Approved",
+    },
+    "BPW": {
+        "initiated": "Initiated",
+        "in_progress": "In Progress",
+        "approved": "Completed",
+    },
+}
 
 
 STANDARD_MATRIX: list[StandardAction] = [
@@ -36,6 +58,7 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "SDE",
         "lead": 7,
         "dep": None,
+        "status_input": "CR",
     },
     {
         "ph": 1,
@@ -54,6 +77,7 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "SDE",
         "lead": 7,
         "dep": None,
+        "dual_date": True,
     },
     {
         "ph": 1,
@@ -63,6 +87,7 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "SDE",
         "lead": 7,
         "dep": None,
+        "dual_date": True,
     },
     {
         "ph": 1,
@@ -72,6 +97,7 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "SDE",
         "lead": 7,
         "dep": None,
+        "dual_date": True,
     },
     {
         "ph": 1,
@@ -109,9 +135,8 @@ STANDARD_MATRIX: list[StandardAction] = [
         "lead": 7,
         "dep": None,
     },
-    # Phase 2: Internal Approval
     {
-        "ph": 2,
+        "ph": 1,
         "tab": "CVS CR",
         "act": "Identify if applicable or not",
         "input_type": "Applicable / Not applicable",
@@ -120,14 +145,16 @@ STANDARD_MATRIX: list[StandardAction] = [
         "dep": None,
     },
     {
-        "ph": 2,
+        "ph": 1,
         "tab": "CVS CR",
         "act": "Input CR number for CVS on Windchill",
         "input_type": "CR number",
         "fn": "ENG",
         "lead": None,
         "dep": 9,
+        "status_input": "CR",
     },
+    # Phase 2: Interim Approval
     {
         "ph": 2,
         "tab": "PPAP Status",
@@ -136,6 +163,7 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "SDE",
         "lead": None,
         "dep": 4,
+        "closes_on": ["Full approved"],
     },
     {
         "ph": 2,
@@ -154,6 +182,8 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "SDE",
         "lead": None,
         "dep": 12,
+        "status_input": "STANDARD",
+        "dual_date": True,
     },
     {
         "ph": 2,
@@ -163,6 +193,7 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "PM",
         "lead": 175,
         "dep": None,
+        "status_input": "BPW",
     },
     {
         "ph": 2,
@@ -191,6 +222,8 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "SDE",
         "lead": None,
         "dep": 16,
+        "status_input": "STANDARD",
+        "dual_date": True,
     },
     {
         "ph": 3,
@@ -209,107 +242,7 @@ STANDARD_MATRIX: list[StandardAction] = [
         "fn": "PM",
         "lead": 175,
         "dep": None,
-    },
-    # Phase 4: Scrap
-    {
-        "ph": 4,
-        "tab": "Old tool disposition",
-        "act": "Confirm scrap / return / storage / disposition if required",
-        "input_type": "Scrap / Return / Storage / Not required",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": None,
-    },
-    {
-        "ph": 4,
-        "tab": "Receive SCR request",
-        "act": "Request SCR from supplier to proceed with scrapping tool",
-        "input_type": "SCR reference",
-        "fn": "SDE",
-        "lead": None,
-        "dep": 20,
-    },
-    {
-        "ph": 4,
-        "tab": "Prepare documentation for scrapping",
-        "act": "Review if tool can be scrapped and fill TDA format",
-        "input_type": "TDA document link",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": 21,
-    },
-    {
-        "ph": 4,
-        "tab": "TDA Approval",
-        "act": "Review tool in the books / approval",
-        "input_type": "Approval date",
-        "fn": "Accounting",
-        "lead": None,
-        "dep": 22,
-    },
-    {
-        "ph": 4,
-        "tab": "Scrap tool",
-        "act": "Confirm if internal scrapping or external scrap",
-        "input_type": "Internal / External",
-        "fn": "Accounting",
-        "lead": None,
-        "dep": 23,
-    },
-    # Phase 5: Archive
-    {
-        "ph": 5,
-        "tab": "Prepare management review",
-        "act": "Prepare slides / summary / overdue list",
-        "input_type": "Review document link",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": None,
-    },
-    {
-        "ph": 5,
-        "tab": "Attend supplier status meeting",
-        "act": "Review multiple tooling projects with supplier",
-        "input_type": "Meeting date",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": None,
-    },
-    {
-        "ph": 5,
-        "tab": "Maintain tooling master list",
-        "act": "Update master list / Excel / SharePoint / system",
-        "input_type": "Update date",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": None,
-    },
-    {
-        "ph": 5,
-        "tab": "Upload / store documents",
-        "act": "Save RFQ / quote / PO / PPAP / approvals in required location",
-        "input_type": "Folder link",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": None,
-    },
-    {
-        "ph": 5,
-        "tab": "Search for historical information",
-        "act": "Search old emails / folders / systems for previous tooling data",
-        "input_type": "Findings / link",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": None,
-    },
-    {
-        "ph": 5,
-        "tab": "Correct data / tracker errors",
-        "act": "Correct tool status / ownership / timing / supplier information",
-        "input_type": "Correction date",
-        "fn": "SP/BU",
-        "lead": None,
-        "dep": None,
+        "dual_date": True,
     },
 ]
 
@@ -427,7 +360,7 @@ def compute_project_summary(
     phases = []
     health: Health
     state: PhaseState
-    for ph_idx in range(6):
+    for ph_idx in range(4):
         ph_acts = [a for a in actions if a.ph == ph_idx]
         ph_counts = {
             color: sum(compute_action_status(a, curr_date) == color for a in ph_acts)
@@ -457,8 +390,8 @@ def compute_project_summary(
         )
 
     # Determine active phase (first phase with incomplete actions)
-    active_phase = 5
-    for ph_idx in range(6):
+    active_phase = 3
+    for ph_idx in range(4):
         if any(a.ph == ph_idx and not a.done_date for a in actions):
             active_phase = ph_idx
             break

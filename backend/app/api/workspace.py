@@ -5,7 +5,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.routes import Database, WriteDatabase, save
 from app.models.workspace import Workspace
-from app.schemas.workspace import WorkspaceResponse, WorkspaceWrite
+from app.schemas.workspace import WorkspaceResponse, WorkspaceSnapshot, WorkspaceWrite
 from app.services.workspace_identity import tool_identity
 from app.services.workspace_snapshots import write_snapshot
 
@@ -56,3 +56,9 @@ def import_identity(parts: Annotated[list[str], Body(max_length=8)]):
     if any(len(part) > 2048 for part in parts):
         raise HTTPException(422, "Tool identity field is too long")
     return {"id": tool_identity(parts)}
+
+
+@router.post("/validate", response_model=WorkspaceSnapshot)
+def validate_workspace(data: WorkspaceSnapshot):
+    # 只读校验入口：浏览器通过验证后才能替换内存工作区。
+    return data

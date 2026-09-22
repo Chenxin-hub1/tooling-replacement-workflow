@@ -1,3 +1,4 @@
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -5,6 +6,7 @@ from io import BytesIO
 from typing import Literal
 from zipfile import BadZipFile, ZipFile
 
+from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 from pydantic import ValidationError
@@ -26,7 +28,7 @@ from app.schemas.excel import (
     ImportReport,
     ImportTeam,
 )
-from app.services.projects import touch
+from app.services.projects import action_value_changes, touch
 
 Mode = Literal["create", "upsert"]
 MAX_UPLOAD = 10 * 1024 * 1024
@@ -248,6 +250,8 @@ def parse_workbook(content: bytes) -> WorkbookData:
                         "due_date",
                         "done_date",
                         "last_remind_date",
+                        "orig",
+                        "date_log",
                     ):
                         value = ""
                     if isinstance(value, datetime):
@@ -263,6 +267,12 @@ def parse_workbook(content: bytes) -> WorkbookData:
                         value = str(value)
                     if key == "is_custom" and value is None:
                         value = False
+                    if key == "date_log":
+                        try:
+                            value = json.loads(value) if value else []
+                        except (TypeError, ValueError):
+                            # Pass malformed input to schema validation for a row error.
+                            pass
                     values[key] = value
                 try:
                     item = model.model_validate(values)
@@ -323,6 +333,7 @@ async def prepare_import(
         action_rows=len(data.actions),
     )
     planned: dict[str, Project] = {}
+    existing_projects: set[str] = set()
 
     def error(sheet: str, row: int, message: str):
         report.errors.append(ImportIssue(sheet=sheet, row=row, message=message))
@@ -333,6 +344,7 @@ async def prepare_import(
             continue
         existing = await db.get(Project, item.id)
         if existing is not None:
+            existing_projects.add(item.id)
             if mode == "create":
                 error(
                     "Projects",
@@ -395,12 +407,12 @@ async def prepare_import(
             continue
         seen_actions.add(item.id)
         action = next((a for a in project.actions if a.id == item.id), None)
-        values = item.model_dump(exclude_unset=True)
+        values = item.model_dump(exclude_unset=True, by_alias=True)
         if action is None:
             if not item.is_custom:
                 error("Actions", row, "Unknown standard action ID")
                 continue
-            action = ProjectAction(**item.model_dump())
+            action = ProjectAction(**item.model_dump(by_alias=True))
             project.actions.append(action)
         elif action.is_custom != item.is_custom:
             error(
@@ -427,6 +439,35 @@ async def prepare_import(
                     "Standard action definition differs from the current matrix",
                 )
                 continue
+        imported_history = values.pop("date_log", None)
+        imported_original = values.pop("orig", None)
+        # 现存历史和原始日期不可被表格覆盖；完成状态则按本次导入证据重新核验。
+        try:
+            values = action_value_changes(action, values, source="import")
+            if (
+                (action.done_date or item.done_date)
+                and "done_date" in values
+                and values["done_date"] is None
+            ):
+                report.warnings.append(
+                    f"Actions row {row} ({item.id}): action reopened; this import does not provide valid completion evidence required by the current rules."
+                )
+            if item.project_id not in existing_projects:
+                if imported_history:
+                    if imported_history[-1]["to"] != (
+                        values.get("value", action.value) or ""
+                    ):
+                        raise ValueError("Date history must end at the current date")
+                    values["date_log"] = imported_history
+                if imported_original is not None:
+                    values["orig"] = imported_original
+        except (HTTPException, ValueError) as exc:
+            error(
+                "Actions",
+                row,
+                str(exc.detail) if isinstance(exc, HTTPException) else str(exc),
+            )
+            continue
         for key, value in values.items():
             setattr(action, key, value)
     for project in planned.values():
@@ -459,7 +500,12 @@ def export_workbook(projects: list[Project]) -> bytes:
         "Actions": (
             ACTION_FIELDS,
             [
-                [getattr(action, key) for key in ACTION_FIELDS]
+                [
+                    json.dumps(getattr(action, key), ensure_ascii=False)
+                    if key == "date_log"
+                    else getattr(action, key)
+                    for key in ACTION_FIELDS
+                ]
                 for p in projects
                 for action in p.actions
             ],

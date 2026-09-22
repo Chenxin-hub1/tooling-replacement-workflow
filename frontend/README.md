@@ -2,13 +2,13 @@
 
 当前入口遵循用户指定的 `.design/reference/tooling-replacement-workflow_3459.html`，不使用独立设计的 React 页面。
 
-`bun run dev` / `bun run build` 首先执行 `scripts/prepare-prototype.mjs`：读取仓库样板，复制原始脚本到 `public/prototype.js`，原始 HTML/CSS 生成 `index.html`，然后由 Vite 提供服务或构建。生成器只调整本地资源路径、初始化时机和服务器保存说明。禁止手工修改生成文件；调整业务 UI 前先征求用户对样板变更的明确指示。
+`bun run dev` / `bun run build` 首先执行 `scripts/prepare-prototype.mjs`：读取仓库样板，复制原始脚本到 `public/prototype.js`，原始 HTML/CSS 生成 `index.html`，然后由 Vite 提供服务或构建。生成器调整资源路径、初始化、服务器保存说明、安全转义及已确认的四阶段流程。生成文件应通过构建更新；业务变化遵循已接受的评审范围。
 
 `public/workspace.js` 在全部样板声明初始化后加载服务器工作区，替代浏览器 localStorage 自动保存与演示重置。使用版本号进行串行提交，保存失败保留当前页面并提示；没有读到服务器数据时不显示可编辑工作区，不自动覆盖服务器。
 
-`public/vendor/` 包含原版本 SheetJS 0.18.5 和 IBM Plex Sans 字体。页面加载不依赖第三方 CDN。原样板 SHA-256 记录在 `public/reference-version.json`。
+`public/vendor/` 包含官方 SheetJS 0.20.3（含已知安全漏洞修复） 和 IBM Plex Sans 字体。页面加载不依赖第三方 CDN。原样板 SHA-256 记录在 `public/reference-version.json`。
 
-`src/` 中的 React 实现和对应单元测试是历史实现；`e2e/workflow.spec.ts.legacy` 是旧界面测试，不参加当前浏览器验证。当前测试是 `e2e/prototype.spec.ts`。原接口生成工具保留，只有维护旧 API 时才需要运行 `bun run generate`。
+React 实现已退役并从仓库删除，历史可从 Git 查询；`e2e/workflow.spec.ts.legacy` 不参与验证。当前浏览器用例覆盖样板保留布局、v2 流程、数据往返及安全回归。
 
 开发 API 默认代理 `http://127.0.0.1:8000`；可用 `API_PROXY_TARGET` 覆盖。浏览器截图证据写入 `.design/screenshots/parity/`。
 

@@ -217,7 +217,7 @@ async function bootWorkspace() {
     serverRevision = result.revision;
     if (result.snapshot) {
       restore(result.snapshot);
-      persistedContent = contentKey(snapshot());
+      persistedContent = contentKey(result.snapshot);
     }
     serverReady = true;
     refreshUsers();

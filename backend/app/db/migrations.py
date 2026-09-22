@@ -10,6 +10,14 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import Base
 
+# v2 迁移 0003 起，0001 基线之后新增的列在此排除，使 needs_baseline 始终比对
+# "Phase-1 基线"结构（0001 全部表、不含 workspaces 与后续增量列）。
+BASELINE_EXCLUDED_COLUMNS = {
+    ("project_actions", "status"),
+    ("project_actions", "orig"),
+    ("project_actions", "date_log"),
+}
+
 
 async def needs_baseline(url: str) -> bool:
     engine = create_async_engine(url)
@@ -26,6 +34,9 @@ async def needs_baseline(url: str) -> bool:
                 for table in Base.metadata.sorted_tables:
                     if table.name != "workspaces":
                         table.to_metadata(baseline)
+                for table_name, column_name in BASELINE_EXCLUDED_COLUMNS:
+                    column = baseline.tables[table_name].columns[column_name]
+                    baseline.tables[table_name]._columns.remove(column)
                 if compare_metadata(
                     MigrationContext.configure(sync_connection), baseline
                 ):

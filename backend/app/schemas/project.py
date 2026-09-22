@@ -106,9 +106,9 @@ class ProjectSummary(BaseModel):
     overdue_actions: int
     due_soon_actions: int
     undated_actions: int
-    phase_statuses: list[PhaseState] = Field(min_length=6, max_length=6)
-    phase_health: list[Health] = Field(min_length=6, max_length=6)
-    phases: list[PhaseSummary] = Field(min_length=6, max_length=6)
+    phase_statuses: list[PhaseState] = Field(min_length=4, max_length=4)
+    phase_health: list[Health] = Field(min_length=4, max_length=4)
+    phases: list[PhaseSummary] = Field(min_length=4, max_length=4)
     next_milestone: str | None = None
     red_flags: list[str] = []
 

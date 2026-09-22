@@ -1,4 +1,6 @@
+import re
 from datetime import UTC, date, datetime
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -7,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dates import local_today
 from app.engine.scheduler import (
+    STANDARD_MATRIX,
     build_actions_for_project,
     compute_action_status,
     compute_project_summary,
@@ -25,6 +28,12 @@ from app.schemas.project import (
     ProjectListItem,
     ProjectResponse,
     ProjectUpdate,
+)
+
+# Keep placeholder semantics aligned with Workflow.pending in workflow-core.js.
+PENDING_VALUE = re.compile(
+    r"(?:pend(?:ing)?(?:\b.*)?|tbd|tbc|n/?a|not applicable|unknown|not started|[-?]+)",
+    re.IGNORECASE,
 )
 
 
@@ -150,11 +159,167 @@ def create_action(project: Project, data: ActionCreate) -> ProjectAction:
     return action
 
 
+def action_value_changes(
+    action: ProjectAction,
+    proposed: dict[str, Any],
+    *,
+    source: Literal["edit", "import"] = "edit",
+) -> dict[str, Any]:
+    """Validate a proposed transition before mutating the action or its history."""
+    changes = dict(proposed)
+    rule = next(
+        (
+            row
+            for row in STANDARD_MATRIX
+            if not action.is_custom
+            and (row["tab"], row["act"]) == (action.tab, action.act)
+        ),
+        None,
+    )
+    imported_evidence = source == "import" and bool(
+        {"value", "status", "done_date"}.intersection(proposed)
+    )
+    if imported_evidence:
+        # 重导只依据本次明确提供的完成证据，旧值相同也不继承历史完成状态。
+        approved = bool(
+            rule
+            and (
+                (rule.get("status_input") and changes.get("status") == "approved")
+                or (rule.get("closes_on") and changes.get("value") in rule["closes_on"])
+            )
+        )
+        if approved:
+            same_approval = bool(
+                rule
+                and changes.get("value", action.value) == action.value
+                and (
+                    (rule.get("status_input") and action.status == "approved")
+                    or (rule.get("closes_on") and action.value in rule["closes_on"])
+                )
+            )
+            previous_done = (
+                action.done_date
+                if same_approval
+                and action.done_date
+                and action.done_date <= local_today()
+                else None
+            )
+            changes["done_date"] = (
+                changes.get("done_date") or previous_done or local_today()
+            )
+        elif rule and (rule.get("status_input") or rule.get("closes_on")):
+            changes["done_date"] = None
+            if action.status == "approved" and "status" not in changes:
+                changes["status"] = "in_progress"
+        else:
+            changes["done_date"] = changes.get("done_date")
+    value = changes.get("value", action.value)
+    value_changed = "value" in changes and (value or "") != (action.value or "")
+    approval = changes.get("status", action.status)
+    done = changes.get("done_date", action.done_date)
+    if "done_date" in changes and done and done > local_today():
+        raise HTTPException(422, "Actual completion date cannot be in the future")
+    parsed = None
+    confirms_completion = changes.get("status") == "approved" or bool(
+        changes.get("done_date")
+    )
+    status_changed = "status" in changes and approval != action.status
+    validate_value = (
+        value_changed
+        or confirms_completion
+        or (imported_evidence and "value" in proposed)
+    )
+    if (
+        value_changed
+        or status_changed
+        or "done_date" in changes
+        or confirms_completion
+        or (
+            rule and rule.get("closes_on") and changes.get("value") in rule["closes_on"]
+        )
+    ):
+        text = (value or "").strip()
+        choices = action.input_type.split(" / ") if " / " in action.input_type else []
+        valid_value = (
+            text in choices
+            if choices
+            else bool(text and not PENDING_VALUE.fullmatch(text))
+        )
+        if validate_value and text and not valid_value:
+            raise HTTPException(422, "Enter a valid value instead of a placeholder")
+        if confirms_completion and not valid_value:
+            raise HTTPException(422, "A valid value is required to confirm completion")
+        if validate_value and value and action.input_type == "Date":
+            try:
+                parsed = date.fromisoformat(value)
+                if parsed.isoformat() != value:
+                    raise ValueError("Date must use YYYY-MM-DD")
+            except ValueError as exc:
+                raise HTTPException(422, "Current date must use YYYY-MM-DD") from exc
+        if (
+            validate_value
+            and value
+            and " / " in action.input_type
+            and value not in action.input_type.split(" / ")
+        ):
+            raise HTTPException(422, "Value must be one of the action options")
+        if (
+            value_changed
+            and action.status == "approved"
+            and changes.get("status") != "approved"
+        ):
+            approval = changes["status"] = "in_progress"
+        eligible = valid_value
+        if rule and rule.get("status_input"):
+            eligible = eligible and approval == "approved"
+        elif rule and rule.get("closes_on"):
+            eligible = value in rule["closes_on"]
+        if not eligible and changes.get("done_date"):
+            raise HTTPException(
+                422,
+                "Required value and final approval are needed to complete this action",
+            )
+        if not eligible or (value_changed and "done_date" not in changes):
+            changes["done_date"] = None
+        if (
+            rule
+            and (
+                (rule.get("status_input") and changes.get("status") == "approved")
+                or (rule.get("closes_on") and changes.get("value") in rule["closes_on"])
+            )
+            and eligible
+            and "done_date" not in proposed
+        ):
+            changes["done_date"] = (
+                local_today() if value_changed else done or local_today()
+            )
+    if rule and rule.get("dual_date") and value_changed:
+        if action.orig is None:
+            try:
+                changes["orig"] = (
+                    date.fromisoformat(action.value) if action.value else parsed
+                )
+            except ValueError:
+                changes["orig"] = parsed
+        changes["date_log"] = [
+            *(action.date_log or []),
+            {
+                "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                "by": "API",
+                "from": action.value or "",
+                "to": value or "",
+                "source": source,
+            },
+        ]
+    return changes
+
+
 def update_action(project: Project, action: ProjectAction, data: ActionUpdate) -> None:
     changes = data.model_dump(exclude_unset=True)
     effective_lead = changes.get("lead", action.lead)
     if "due_date" in changes and effective_lead is not None:
         raise HTTPException(422, "Set lead to null before assigning a manual due_date")
+    changes = action_value_changes(action, changes)
     for key, value in changes.items():
         setattr(action, key, value)
     schedule(project)

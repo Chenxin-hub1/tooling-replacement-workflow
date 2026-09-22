@@ -1,7 +1,7 @@
 from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -29,6 +29,15 @@ class ProjectAction(Base):
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     done_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )  # v2: initiated / in_progress / approved
+    orig: Mapped[date | None] = mapped_column(
+        Date, nullable=True
+    )  # v2: 双日期动作的原始日期
+    date_log: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON, default=list, server_default="[]"
+    )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     link: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False)

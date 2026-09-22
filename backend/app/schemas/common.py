@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 Role = Literal["BU Buyer", "SDE", "PM", "ENG", "SP/BU", "Accounting"]
 Health = Literal["green", "red", "yellow", "gray"]
 PhaseState = Literal["completed", "overdue", "in-progress", "planned"]
-Phase = Annotated[int, Field(ge=0, le=5, strict=True)]
+Phase = Annotated[int, Field(ge=0, le=3, strict=True)]
 Lead = Annotated[int, Field(ge=0, le=36500, strict=True)]
 Name = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)

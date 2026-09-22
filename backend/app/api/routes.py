@@ -168,7 +168,7 @@ async def kpi_summary(db: Database):
         completed_actions=sum(s.completed_actions for s in summaries),
         overdue_actions=sum(s.overdue_actions for s in summaries),
         due_soon_actions=sum(s.due_soon_actions for s in summaries),
-        phase_distribution=[PhaseCount(phase=i, projects=phases[i]) for i in range(6)],
+        phase_distribution=[PhaseCount(phase=i, projects=phases[i]) for i in range(4)],
         overdue_by_function=[
             OverdueRole(function=role, overdue_actions=count)
             for role, count in sorted(roles.items())

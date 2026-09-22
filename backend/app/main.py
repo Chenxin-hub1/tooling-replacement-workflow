@@ -16,6 +16,7 @@ from app.api.workspace import router as workspace_router
 from app.config import settings
 from app.db.migrations import migrate_database
 from app.db.session import get_db
+from app.security import RequestBoundary
 from app.static import SPAStaticFiles
 
 
@@ -37,11 +38,13 @@ if settings.CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+
+app.add_middleware(RequestBoundary)
 
 app.include_router(router, prefix=settings.API_V1_STR)
 app.include_router(excel_router, prefix=settings.API_V1_STR)

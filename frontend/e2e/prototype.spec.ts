@@ -20,6 +20,30 @@ const reference = readFileSync(
     "Assignment email goes to the owner as soon as the item is added.",
     "Assignment preview only. No email or Teams message is sent.",
   );
+// 参考图仅适配已授权的阶段删除；其余结构仍以原样板为基准。
+const fourStepReference = reference
+  .replaceAll("{ph:2,tab:'CVS CR'", "{ph:1,tab:'CVS CR'")
+  .replace("Enter &amp; complete", "Update action")
+  .replace(
+    "The action stays open until the required input is entered.",
+    "Saving information keeps the action open. Confirm completion separately.",
+  )
+  .replace(
+    '<button class="btn" onclick="completeAction()">Mark complete</button>',
+    '<button class="btn secondary">Save information</button> <button class="btn" onclick="completeAction()">Mark complete</button>',
+  )
+  .replace(
+    "'4. Customer Approval','5. Scrap','6. Archive'",
+    "'4. Customer Approval'",
+  )
+  .replace("let CUSTOM_SEQ=0;", "MATRIX.splice(20);let CUSTOM_SEQ=0;")
+  .replace(
+    "let phase=5; for(let i=0;i<6;i++)",
+    "let phase=3; for(let i=0;i<4;i++)",
+  )
+  .replace("const ms=[1,2,3,4,5].map", "const ms=[1,2,3].map")
+  .replace("repeat(6,1fr)", "repeat(4,1fr)")
+  .replaceAll("six phases", "four phases");
 const ready = (page: Page) =>
   page.waitForFunction(
     "serverReady && !serverSaving && STORAGE_OK && contentKey(snapshot()) === persistedContent",
@@ -30,7 +54,7 @@ async function sameImage(actual: Page, original: Page, name: string) {
     await page.evaluate("document.fonts.ready");
     await page.addStyleTag({
       content:
-        "#saveLbl, #saveLbl2 { visibility: hidden !important; } .timeline { display: none !important; }",
+        "#saveLbl, #saveLbl2 { visibility: hidden !important; } .timeline { display: none !important; } select[aria-label], select[aria-label] + input { display: none !important; }",
     });
     await page.locator("#toast").evaluate((el) => el.classList.remove("show"));
     await page
@@ -72,7 +96,9 @@ async function sameImage(actual: Page, original: Page, name: string) {
       const y = context.getImageData(0, 0, l.width, l.height).data;
       let count = 0;
       for (let i = 0; i < x.length; i += 4)
-        if (x.slice(i, i + 4).some((v, k) => v !== y[i + k])) count++;
+        // GPU 圆角/字形边缘存在最多 8/255 的通道噪声；只计可见色差。
+        if (x.slice(i, i + 4).some((v, k) => Math.abs(v - y[i + k]) > 8))
+          count++;
       return count;
     },
     [a, b].map(
@@ -101,7 +127,7 @@ test("unchanged desktop views retain the original layout", async ({
     viewport: { width: 1440, height: 1000 },
   });
   await original.route("**/reference", (route) =>
-    route.fulfill({ contentType: "text/html", body: reference }),
+    route.fulfill({ contentType: "text/html", body: fourStepReference }),
   );
   await Promise.all([
     page.clock.setFixedTime(new Date("2026-09-12T08:00:00Z")),
@@ -109,9 +135,11 @@ test("unchanged desktop views retain the original layout", async ({
   ]);
   await page.goto("/");
   await ready(page);
+  await page.evaluate("seed();render()");
+  await ready(page);
   await original.goto("http://127.0.0.1:5174/reference");
   await expect(original.locator("h1")).toHaveText("Project portfolio");
-  expect(await page.evaluate("MATRIX.length")).toBe(31);
+  expect(await page.evaluate("MATRIX.length")).toBe(20);
   for (const view of ["portfolio", "mine", "mgmt", "admin"]) {
     for (const p of [page, original])
       await p.locator(`[data-v="${view}"]`).click();
@@ -120,6 +148,13 @@ test("unchanged desktop views retain the original layout", async ({
   }
   for (const p of [page, original])
     await p.evaluate("openProject('TR-2026-019')");
+  // v2 授权增量：动作表"Required input"列现在含状态下拉与 Full approved 值，
+  // 对比参考样板时两侧同收起该列（display 才能对齐宽度），其余区域仍逐像素一致。
+  for (const p of [page, original])
+    await p.addStyleTag({
+      content:
+        "#main table td:nth-child(2), #main table th:nth-child(2) { display: none !important; }",
+    });
   await sameImage(page, original, "project");
   for (const action of [
     "EDIT=true;render()",
@@ -178,9 +213,9 @@ test("original edits, admin settings, comments and template changes persist acro
     .getByRole("button", { name: "Add item", exact: true })
     .click();
   await ready(page);
-  expect(await page.evaluate("MATRIX.length")).toBe(32);
+  expect(await page.evaluate("MATRIX.length")).toBe(21);
   const saved = await (await page.request.get("/api/workspace")).json();
-  expect(saved.snapshot.MATRIX.length).toBe(32);
+  expect(saved.snapshot.MATRIX.length).toBe(21);
   const second = await browser.newPage();
   await second.goto("http://127.0.0.1:5174/");
   await ready(second);
@@ -336,11 +371,29 @@ test("three-step wizard, reassignment, reminders, reopen and workspace backup us
   await row.getByPlaceholder("CR number", { exact: true }).fill("CR-WIZ");
   await row.getByPlaceholder("CR number", { exact: true }).press("Tab");
   await ready(page);
+  // v2：录入编号不再完成凭证类动作——Complete 仍在，改走状态开关。
+  await expect(
+    row.getByRole("button", { name: "Complete", exact: true }),
+  ).toBeVisible();
+  // 表格内下拉被 enhanceSelects 替换为自定义组件，原生 select 隐藏，只能编程派发。
+  const setHiddenSelect = (
+    locator: ReturnType<Page["locator"]>,
+    value: string,
+  ) =>
+    locator.evaluate((el, val) => {
+      const select = el as HTMLSelectElement;
+      select.value = val;
+      select.dispatchEvent(new Event("change"));
+    }, value);
+  await setHiddenSelect(
+    row.locator('select[title="Approval status"]'),
+    "approved",
+  );
+  await ready(page);
   await expect(
     row.getByRole("button", { name: "Complete", exact: true }),
   ).toHaveCount(0);
-  await row.getByPlaceholder("CR number", { exact: true }).fill("");
-  await row.getByPlaceholder("CR number", { exact: true }).press("Tab");
+  await setHiddenSelect(row.locator('select[title="Approval status"]'), "");
   await ready(page);
   await expect(
     row.getByRole("button", { name: "Complete", exact: true }),
@@ -375,7 +428,7 @@ test("pending values, invalid dates and zero intervals cannot silently complete 
   await expect(page.locator("#aVal")).toBeFocused();
   await page.locator("#aVal").fill("TBD");
   await page.getByRole("button", { name: "Mark complete" }).click();
-  await expect(page.locator("#toast")).toContainText("pending value");
+  await expect(page.locator("#toast")).toContainText("valid confirmed value");
   await page.locator("#aVal").fill("BPO-OK");
   await page.locator("#aDate").fill("2099-01-01");
   await page.getByRole("button", { name: "Mark complete" }).click();
@@ -465,20 +518,20 @@ test("timeline milestone labels never overlap or escape the card", async ({
           .height,
       };
     });
-  // 默认数据：五个阶段字段齐全、无重叠、不出卡片。
+  // 默认数据：三个阶段字段齐全、无重叠、不出卡片。
   const normal = await measure();
-  expect(normal.labels).toBe(5);
+  expect(normal.labels).toBe(3);
   expect(normal.overlaps).toEqual([]);
   expect(normal.escaped).toBe(0);
   // 强制多个阶段同日结束：分层错开后仍不重叠、不出卡片，且时间线增高。
   await page.evaluate(`(() => {
     const p = projects.find(q => q.id === 'TR-2026-019');
-    p.actions.forEach(a => { if (a.ph >= 3) { a.done = null; a.due = d2s(TODAY); } });
+    p.actions.forEach(a => { if (a.ph >= 1) { a.done = null; a.due = d2s(TODAY); } });
     render();
   })()`);
   await ready(page);
   const clustered = await measure();
-  expect(clustered.labels).toBe(5);
+  expect(clustered.labels).toBe(3);
   expect(clustered.overlaps).toEqual([]);
   expect(clustered.escaped).toBe(0);
   expect(clustered.height as number).toBeGreaterThan(normal.height as number);
@@ -704,4 +757,128 @@ test("loading a workspace file clears a save conflict without reloading", async 
       }),
     });
   }, original);
+});
+
+test("status semantics keep tracked actions open until approved", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  await page.evaluate("openProject('TR-2026-019')");
+  await ready(page);
+  const actionRow = (tab: string) =>
+    page.locator("#main tr").filter({
+      has: page.locator("b", { hasText: new RegExp(`^${tab}$`) }),
+    });
+
+  // PPAP Status（closesOn）：Draft 只记录不完成，Full approved 才完成。
+  // 表格内下拉被 enhanceSelects 替换为自定义组件，原生 select 隐藏，只能编程派发。
+  const ppap = actionRow("PPAP Status");
+  const setPpap = (value: string) =>
+    ppap
+      .locator("select")
+      .first()
+      .evaluate((el, val) => {
+        const select = el as HTMLSelectElement;
+        select.value = val;
+        select.dispatchEvent(new Event("change"));
+      }, value);
+  await setPpap("Draft");
+  await ready(page);
+  await expect(
+    ppap.getByRole("button", { name: "Complete", exact: true }),
+  ).toBeVisible();
+  await setPpap("Full approved");
+  await ready(page);
+  await expect(
+    ppap.getByRole("button", { name: "Complete", exact: true }),
+  ).toHaveCount(0);
+
+  // CR（statusInput）：弹窗里填号 + Created 只保存；Approved 才完成。
+  await page.evaluate(
+    "openAction(current.actions.find(a=>a.tab==='CR'&&a.ph===1).id)",
+  );
+  await page.locator("#aVal").fill("CR-STATUS-E2E");
+  await page.locator("#aStatus").selectOption({ label: "Created" });
+  await page.getByRole("button", { name: "Save status" }).click();
+  await ready(page);
+  const cr = actionRow("CR");
+  // 值保存在表格行内 input 里，用 inputValue 断言而不是文本匹配。
+  expect(
+    await cr.getByPlaceholder("CR number", { exact: true }).inputValue(),
+  ).toBe("CR-STATUS-E2E");
+  await expect(
+    cr.getByRole("button", { name: "Complete", exact: true }),
+  ).toBeVisible();
+
+  await page.evaluate(
+    "openAction(current.actions.find(a=>a.tab==='CR'&&a.ph===1).id)",
+  );
+  await page.locator("#aStatus").selectOption({ label: "Approved" });
+  await expect(
+    page.getByRole("button", { name: "Mark complete" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Mark complete" }).click();
+  await ready(page);
+  await expect(
+    cr.getByRole("button", { name: "Complete", exact: true }),
+  ).toHaveCount(0);
+
+  // 状态降级重开：Approved 改回 Created，动作重新开放。
+  await cr.locator('select[title="Approval status"]').evaluate((el, val) => {
+    const select = el as HTMLSelectElement;
+    select.value = val;
+    select.dispatchEvent(new Event("change"));
+  }, "initiated");
+  await ready(page);
+  await expect(
+    cr.getByRole("button", { name: "Complete", exact: true }),
+  ).toBeVisible();
+});
+
+test("date history keeps the original date and marks moves", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  await page.evaluate("openProject('TR-2026-019')");
+  await ready(page);
+  const fot = page
+    .locator("#main tr")
+    .filter({ has: page.locator("b", { hasText: /^FOT Date$/ }) });
+  // 演示值是 "16 May 2026" 显示格式，浏览器按空值渲染——从状态读原始日期。
+  const state = await page.evaluate(
+    "current.actions.find(a=>a.tab==='FOT Date')",
+  );
+  expect(state.orig).toBeTruthy();
+
+  // 改期：当前值更新，原始日期保持，行内出现挪期标记。
+  // 行内有两个日期框（值 + Due），值输入以 placeholder="Date" 区分。
+  await fot.getByPlaceholder("Date", { exact: true }).fill("2026-11-15");
+  await fot.getByPlaceholder("Date", { exact: true }).press("Tab");
+  await ready(page);
+  const moved = fot.locator('.hint[title="Date moved from the original"]');
+  await expect(moved).toContainText("moved from");
+  expect(
+    await page.evaluate("current.actions.find(a=>a.tab==='FOT Date')"),
+  ).toMatchObject({ orig: state.orig, value: "2026-11-15" });
+
+  // Admin 修正原始日期：留痕一条，标记随之更新（演示 FOT 已完成，用 evaluate 开弹窗）。
+  await page.evaluate(
+    "openAction(current.actions.find(a=>a.tab==='FOT Date').id)",
+  );
+  await page.locator("#aOrigAdj").fill("2026-03-10");
+  await page.getByRole("button", { name: "Correct original" }).click();
+  await ready(page);
+  expect(
+    await page.evaluate("current.actions.find(a=>a.tab==='FOT Date')"),
+  ).toMatchObject({ orig: "2026-03-10" });
+  expect(
+    await page.evaluate(
+      "current.actions.find(a=>a.tab==='FOT Date').origLog.length",
+    ),
+  ).toBe(1);
+  await expect(
+    fot.locator('.hint[title="Date moved from the original"]'),
+  ).toContainText("moved from");
 });

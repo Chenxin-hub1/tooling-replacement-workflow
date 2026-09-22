@@ -19,7 +19,7 @@ replaceOnce(
 );
 replaceOnce(
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
-  "/vendor/xlsx.full.min.js",
+  "/vendor/xlsx.full.min.js?v=0.20.3",
 );
 replaceOnce(
   "if(!loadAutosave()) seed();",
@@ -41,6 +41,8 @@ replaceOnce(
   "const id=Workflow.nextId(projects,d2s(TODAY));",
 );
 replaceOnce("Create project and send assignments", "Create project");
+replaceOnce("(a.value?'background:var(--g-soft);", "(a.done?'background:var(--g-soft);");
+replaceOnce("Enter &amp; complete", "Update action");
 replaceOnce(
   "setTimeout(()=>document.getElementById('aVal').focus(),50);",
   "document.getElementById('aVal').focus();",
@@ -205,6 +207,23 @@ for (const [fragment, expressions, expected] of escRules)
   wrapEvery(fragment, expressions, "escHtml", expected);
 for (const [oldText, newText, expected] of escRewrites)
   replaceExact(oldText, newText, expected);
+
+html = html.replaceAll("six phases", "four phases");
+
+// v2：删除 Scrap / Archive，所有显示与汇总按有效阶段数计算。
+replaceOnce(
+  "'4. Customer Approval','5. Scrap','6. Archive'",
+  "'4. Customer Approval'",
+);
+replaceOnce("let phase=5; for(let i=0;i<6;i++)", "let phase=PHASES.length-1; for(let i=0;i<PHASES.length;i++)");
+replaceOnce("const ms=[1,2,3,4,5].map", "const ms=[1,2,3].map");
+replaceOnce("let CUSTOM_SEQ=0;", "MATRIX.splice(20);\nlet CUSTOM_SEQ=0;");
+// CVS CR 属 Development（原六流程的第 2 步），保持矩阵索引与依赖不变。
+replaceExact("{ph:2,tab:'CVS CR'", "{ph:1,tab:'CVS CR'", 2);
+replaceOnce("repeat(6,1fr)", "repeat(4,1fr)");
+
+replaceExact("<span>${l}", "<span>${escHtml(l)}", 4);
+replaceExact("<label>${l}", "<label>${escHtml(l)}", 2);
 
 const match = html.match(/<script>\n([\s\S]*?)<\/script>/);
 if (!match) throw new Error("Prototype script not found");

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tooling Replacement Workflow</title>
 <link href="/vendor/fonts.css" rel="stylesheet">
-<script src="/vendor/xlsx.full.min.js"></script>
+<script src="/vendor/xlsx.full.min.js?v=0.20.3"></script>
 <style>
 :root{
   --ink:#16202B; --steel:#3E4C5B; --mist:#7A8794; --line:#D7DDE3; --panel:#F3F5F7; --paper:#FFFFFF;
@@ -76,7 +76,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .dot.green{background:var(--g)} .dot.yellow{background:var(--y)} .dot.red{background:var(--r)} .dot.gray{background:var(--gr)}
 
 /* phase rail: signature element */
-.rail6{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;width:160px}
+.rail6{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;width:160px}
 .leadin{width:52px;border:1px solid var(--line);border-radius:4px;padding:3px 5px;text-align:right;font-size:12px}
 .adj{color:var(--blue);font-weight:600}
 .rail6 i{height:8px;border-radius:2px;background:var(--gr-soft);display:block;position:relative}
@@ -164,7 +164,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <button class="nav" data-v="admin">Admin · People &amp; functions</button>
     <button class="btn-new" onclick="openWizard()">+ New project</button>
     <div class="spacer"></div>
-    <div class="foot"><span id="saveLbl"></span><br>Today: <b id="todayLbl"></b><br>Prototype — six phases, owners, tabs, actions and default lead times from the process sheets. Items can be added per step.</div>
+    <div class="foot"><span id="saveLbl"></span><br>Today: <b id="todayLbl"></b><br>Prototype — four phases, owners, tabs, actions and default lead times from the process sheets. Items can be added per step.</div>
   </aside>
   <main id="main"></main>
 </div>
@@ -173,9 +173,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <div class="overlay" id="act"><div class="modal" id="actBody"></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="/prototype.js?v=3c45b53b94"></script>
-<script src="/workflow-core.js?v=3c45b53b94"></script>
-<script src="/improvements.js?v=3c45b53b94"></script>
-<script src="/workspace.js?v=3c45b53b94"></script>
+<script src="/prototype.js?v=5605bd5ca5"></script>
+<script src="/workflow-core.js?v=5605bd5ca5"></script>
+<script src="/improvements.js?v=5605bd5ca5"></script>
+<script src="/workspace.js?v=5605bd5ca5"></script>
 </body>
 </html>

@@ -2,7 +2,10 @@ import { defineConfig } from "vite";
 export default defineConfig({
   server: {
     proxy: {
-      "/api": process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000",
+      "/api": {
+        target: process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000",
+        changeOrigin: false,
+      },
       "/health": process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000",
     },
   },

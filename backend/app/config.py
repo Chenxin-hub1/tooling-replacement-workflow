@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./tooling.db"
     # 空值时快照目录跟随数据库文件（<数据库目录>/backups/workspace）。
     SNAPSHOT_DIR: str = ""
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = []
     DEBUG: bool = False
 
     model_config = SettingsConfigDict(

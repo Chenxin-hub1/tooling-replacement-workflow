@@ -2,6 +2,7 @@ import asyncio
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import text
 
 from app.dates import local_today
 from app.engine.scheduler import STANDARD_MATRIX
@@ -33,7 +34,11 @@ async def test_create_persists_project_team_actions_and_schedule(client):
     dependent = next(a for a in loaded["actions"] if a["id"] == "TR-test-10")
     assert dependent["predecessor"]["id"] == "TR-test-9"
     assert loaded["summary"]["phase_statuses"][0] == "completed"
-    assert len(loaded["summary"]["phases"]) == 6
+    assert len(loaded["summary"]["phases"]) == 4
+    cvs = [a for a in loaded["actions"] if a["tab"] == "CVS CR"]
+    assert len(cvs) == 2
+    assert all(a["ph"] == 1 for a in cvs)
+    assert dependent["id"] == "TR-test-10"
 
 
 async def test_completion_cascades_and_cancellation_reverts(client):
@@ -63,7 +68,8 @@ async def test_completion_cascades_and_cancellation_reverts(client):
 async def test_team_patch_transfers_only_open_work_and_preserves_other_roles(client):
     await create(client)
     await client.patch(
-        "/api/projects/TR-test/actions/TR-test-0", json={"done_date": "2026-09-02"}
+        "/api/projects/TR-test/actions/TR-test-0",
+        json={"value": "CR-DONE", "status": "approved", "done_date": "2026-09-02"},
     )
     response = await client.patch(
         "/api/projects/TR-test", json={"team": {"SDE": "Carol"}, "desc": "Updated"}
@@ -265,7 +271,7 @@ async def test_missing_project_and_empty_kpi(client):
     assert (await client.get("/api/projects/missing")).status_code == 404
     summary = (await client.get("/api/kpi/summary")).json()
     assert summary["total_projects"] == summary["overdue_actions"] == 0
-    assert len(summary["phase_distribution"]) == 6
+    assert len(summary["phase_distribution"]) == 4
 
 
 async def test_schedule_overflow_rolls_back_change(client):
@@ -288,3 +294,189 @@ async def test_schedule_overflow_rolls_back_change(client):
     assert len((await client.get("/api/projects/TR-test")).json()["actions"]) == len(
         STANDARD_MATRIX
     )
+
+
+async def test_approval_status_does_not_collide_with_health(client):
+    await create(client)
+    response = await client.patch(
+        "/api/projects/TR-test/actions/TR-test-0",
+        json={"value": "CR-1", "status": "in_progress"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["approval_status"] == "in_progress"
+    assert response.json()["status"] in ("green", "red", "yellow", "gray")
+    loaded = await client.get("/api/projects/TR-test")
+    assert loaded.status_code == 200
+    assert loaded.json()["actions"][0]["approval_status"] == "in_progress"
+
+
+async def test_approval_downgrade_reopens_and_dates_keep_baseline(client):
+    await create(client)
+    url = "/api/projects/TR-test/actions/TR-test-0"
+    assert (
+        await client.patch(url, json={"done_date": "2026-09-02"})
+    ).status_code == 422
+    response = await client.patch(url, json={"value": "CR-1", "status": "approved"})
+    assert response.json()["done_date"]
+    response = await client.patch(url, json={"status": "in_progress"})
+    assert response.json()["done_date"] is None
+    url = "/api/projects/TR-test/actions/TR-test-2"
+    await client.patch(url, json={"value": "2026-11-01"})
+    response = await client.patch(url, json={"value": "2026-11-03"})
+    assert response.json()["orig"] == "2026-11-01"
+    assert response.json()["value"] == "2026-11-03"
+
+
+async def test_changed_completed_value_requires_explicit_reconfirmation(client):
+    await create(client)
+    url = "/api/projects/TR-test/actions/TR-test-1"
+    response = await client.patch(url, json={"value": "PPAP-1"})
+    assert response.json()["done_date"] is None
+    response = await client.patch(url, json={"done_date": "2026-09-01"})
+    assert response.json()["done_date"] == "2026-09-01"
+    response = await client.patch(url, json={"value": "PPAP-2"})
+    assert response.json()["done_date"] is None
+
+
+async def test_changed_approved_reference_requires_explicit_reapproval(client):
+    await create(client)
+    url = "/api/projects/TR-test/actions/TR-test-0"
+    await client.patch(url, json={"value": "CR-1", "status": "approved"})
+    response = await client.patch(url, json={"value": "CR-2"})
+    assert response.json()["done_date"] is None
+    assert response.json()["approval_status"] == "in_progress"
+    response = await client.patch(url, json={"value": "CR-3", "status": "approved"})
+    assert response.json()["done_date"]
+    assert response.json()["approval_status"] == "approved"
+
+
+@pytest.mark.parametrize("index", [2, 3, 4, 13, 17, 19])
+async def test_date_history_persists_every_change_and_keeps_original(client, index):
+    await create(client)
+    url = f"/api/projects/TR-test/actions/TR-test-{index}"
+    for value in ("2026-04-01", "2026-11-01", "2026-11-01", "", "2026-12-01"):
+        response = await client.patch(url, json={"value": value})
+        assert response.status_code == 200, response.text
+        assert response.json()["done_date"] is None
+        assert response.json()["orig"] == "2026-04-01"
+    loaded = (await client.get("/api/projects/TR-test")).json()
+    action = next(a for a in loaded["actions"] if a["id"] == f"TR-test-{index}")
+    assert [(entry["from"], entry["to"]) for entry in action["date_log"]] == [
+        ("", "2026-04-01"),
+        ("2026-04-01", "2026-11-01"),
+        ("2026-11-01", ""),
+        ("", "2026-12-01"),
+    ]
+    assert all(
+        e["by"] == "API" and e["source"] == "edit" and e["ts"].endswith("Z")
+        for e in action["date_log"]
+    )
+    for patch in (
+        {"value": "2026-02-30", "comment": "must not save"},
+        {"value": "20261101"},
+        {"value": "2026-09-01", "done_date": "9999-01-01"},
+        {"date_log": []},
+    ):
+        response = await client.patch(url, json=patch)
+        assert response.status_code == 422
+        assert (await client.get("/api/projects/TR-test")).json() == loaded
+
+
+async def test_changed_approved_date_reopens_and_same_value_keeps_completion(client):
+    await create(client)
+    url = "/api/projects/TR-test/actions/TR-test-13"
+    response = await client.patch(
+        url,
+        json={"value": "2026-04-01", "status": "approved", "done_date": "2026-09-01"},
+    )
+    assert response.status_code == 200, response.text
+    response = await client.patch(url, json={"value": "2026-04-01"})
+    assert response.json()["done_date"] == "2026-09-01"
+    assert len(response.json()["date_log"]) == 1
+    response = await client.patch(url, json={"value": "2026-11-01"})
+    assert response.json()["done_date"] is None
+    assert response.json()["approval_status"] == "in_progress"
+    assert response.json()["orig"] == "2026-04-01"
+    before = (await client.get("/api/projects/TR-test")).json()
+    assert (
+        await client.patch(url, json={"done_date": "2026-09-01"})
+    ).status_code == 422
+    assert (await client.get("/api/projects/TR-test")).json() == before
+
+
+async def test_explicit_final_ppap_selection_confirms_approval(client):
+    await create(client)
+    url = "/api/projects/TR-test/actions/TR-test-11"
+    response = await client.patch(url, json={"value": "Full approved"})
+    assert response.json()["done_date"]
+    await client.patch(url, json={"done_date": None})
+    response = await client.patch(url, json={"comment": "Still awaiting confirmation"})
+    assert response.json()["done_date"] is None
+    response = await client.patch(url, json={"done_date": "2026-09-01"})
+    assert response.json()["done_date"] == "2026-09-01"
+    response = await client.patch(url, json={"value": "Draft"})
+    assert response.json()["done_date"] is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "TBD",
+        "tbc",
+        "Pending",
+        "Pending approval",
+        "pend",
+        "N/A",
+        "na",
+        "Not applicable",
+        "unknown",
+        "Not started",
+        "--?",
+        "",
+        " ",
+    ],
+)
+async def test_placeholder_or_empty_reference_cannot_be_approved(client, value):
+    original = await create(client)
+    response = await client.patch(
+        "/api/projects/TR-test/actions/TR-test-0",
+        json={"value": value, "status": "approved", "comment": "must rollback"},
+    )
+    assert response.status_code == 422, response.text
+    assert (await client.get("/api/projects/TR-test")).json() == original
+
+
+async def test_not_applicable_choice_can_complete_but_placeholder_id_cannot(client):
+    original = await create(client)
+    response = await client.patch(
+        "/api/projects/TR-test/actions/TR-test-1",
+        json={"value": "Not applicable", "done_date": "2026-09-01"},
+    )
+    assert response.status_code == 422
+    assert (await client.get("/api/projects/TR-test")).json() == original
+    response = await client.patch(
+        "/api/projects/TR-test/actions/TR-test-9",
+        json={"value": "Not applicable", "done_date": "2026-09-01"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["done_date"] == "2026-09-01"
+
+
+async def test_unchanged_legacy_placeholder_is_preserved_until_reconfirmation(
+    client, db_engine
+):
+    await create(client)
+    async with db_engine.begin() as connection:
+        await connection.execute(
+            text(
+                "UPDATE project_actions SET value='TBD',status='approved',done_date='2026-09-01' WHERE id='TR-test-0'"
+            )
+        )
+    url = "/api/projects/TR-test/actions/TR-test-0"
+    for patch in ({"comment": "Keep legacy record"}, {"value": "TBD"}):
+        response = await client.patch(url, json=patch)
+        assert response.status_code == 200, response.text
+        assert response.json()["done_date"] == "2026-09-01"
+    before = (await client.get("/api/projects/TR-test")).json()
+    assert (await client.patch(url, json={"status": "approved"})).status_code == 422
+    assert (await client.get("/api/projects/TR-test")).json() == before
