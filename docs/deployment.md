@@ -142,3 +142,51 @@ TOOLING_HOST=0.0.0.0 TOOLING_PORT=8000 ./scripts/start.sh
 ### Docker 数据区别
 
 当前 Dockerfile 不复制数据库，`.dockerignore` 排除了 `*.db*`；`tooling-data` 卷独立持久化。只执行 `docker compose up --build -d` 会沿用卷内旧数据，新空卷首次打开只会生成 6 个示例，不会自动加载 Git 内这次更新的 52 个项目。使用 Docker 的服务器需要在停服并备份卷内数据库后，显式把本次仓库数据库导入 `/data/tooling.db`，保留 UID 10001 的写权限，再启动；不要用删除整个数据卷代替数据更新。
+
+## Docker Compose 更新现有服务器
+
+用户已确认服务器使用 Docker Compose。以下按仓库现有服务名 `tooling`、数据库 `/data/tooling.db` 和命名卷配置执行；如果服务器覆盖了数据库路径，须对应调整。主机只需 Git、Docker 与 Compose，Python/Node/Bun 都在镜像构建及运行环境中。
+
+本次把仓库内已重新核验的 52 项目数据库装入数据卷。服务器当前数据会完整备份；若服务器另有需要合并的新编辑，先核对这些编辑再执行数据库替换。后续只更新代码时，省略数据库安装步骤即可保留卷内当前数据。
+
+在服务器**现有仓库目录**按顺序运行（沿用原 Compose 项目名；原先使用过 `-p`/`-f` 或环境文件时继续使用相同参数）：
+
+```bash
+set -e
+git pull --ff-only origin main
+# 构建成功后再停服，构建失败不会中断当前服务。
+docker compose build tooling
+docker compose stop tooling
+
+# 将发布数据库及安装脚本只读挂载进临时容器。
+# 安装过程：验证发布数据 → 暂存并迁移 → 完整备份旧库 → 替换。
+docker compose run --rm --no-deps -T \
+  --entrypoint python -e PYTHONPATH=/app/backend \
+  -v "$PWD/backend/tooling.db:/release/tooling.db:ro" \
+  -v "$PWD/scripts/install-workspace-db.py:/ops/install-workspace-db.py:ro" \
+  tooling /ops/install-workspace-db.py /release/tooling.db /data/tooling.db
+
+docker compose up -d --wait tooling
+docker compose ps
+docker compose logs --tail=50 tooling
+curl -fsS http://127.0.0.1:8000/health
+```
+
+安装脚本会输出备份位置（`/data/backups/deploy-...`）和项目统计；旧数据库、WAL、SHM 均保留，备份不覆盖。新数据库在临时文件上完成迁移/校验后才替换，运行用户仍为 UID 10001。安装后的 workspace revision 高于旧卷及发布库版本，旧浏览器页面无法带着旧 revision 覆盖新数据。遇到错误先保留输出处理原因，不跳过失败步骤继续启动。
+
+`--wait` 等待容器健康；较旧 Compose 若不支持，应升级 Compose，或使用 `up -d` 后自行确认 health。正常应看到 `healthy`，浏览器访问 `http://服务器IP:8000` 并刷新页面。数据核对：52 项目、46 个历史导入项目、导入项目 5 项完成；其余 193 项按新规则重新开放。端口如被服务器覆盖，以实际映射为准。
+
+可从容器内核验，不依赖主机 Python：
+
+```bash
+docker compose exec -T tooling python -c 'import json,urllib.request; w=json.load(urllib.request.urlopen("http://127.0.0.1:8000/api/workspace")); p=w["snapshot"]["projects"]; i=[x for x in p if x.get("importSource")]; print({"revision":w["revision"],"projects":len(p),"imported":len(i),"imported_completed":sum(bool(a.get("done")) for x in i for a in x["actions"])})'
+```
+
+备份保存在命名卷内，可另行复制到主机：
+
+```bash
+mkdir -p backups/compose
+docker compose cp tooling:/data/backups backups/compose/
+```
+
+需要恢复数据时，先停服，使用同一个安装脚本将备份目录中的 `snapshot.db` 作为 source、`/data/tooling.db` 作为 target，再启动；恢复同样产生新备份及更高版本号。不要运行 `docker compose down -v`，该命令会删除持久卷及卷内备份。

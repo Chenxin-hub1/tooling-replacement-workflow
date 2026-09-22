@@ -51,3 +51,5 @@ cd ..
 真实 Excel 已于 2026-09-18 按领导指示正式导入（46 条，创建日期统一导入当日；备份与核对记录见 [接入前核对](docs/real-data-readiness.md)）；BPW / CVS CR 等歧义映射仍待业务确认，确认后重导即按身份更新。本机可用 `TOOLING_PORT=8765 ./scripts/start.sh` 启动（8000 端口被其他应用占用）。仓库已于 2026-09-18 推送至 GitHub（Chenxin-hub1/tooling-replacement-workflow，Private）；按用户决定，业务数据库 `backend/tooling.db` 随仓库分发，Git 是代码与数据的单一部署通道。
 
 2026-09-22：历史导入已按新规则重新处理并写入随仓库分发的数据库（46 项目、原 198 个完成调整为 5 个，193 个重新开放）。服务器更新前须停服备份；默认直启方式的完整命令见 [Git 更新部署步骤](docs/deployment.md#本次版本从-git-更新到-linux-服务器2026-09-22)，数据核验见 [重导记录](docs/data-reimport-2026-09-22.md)。
+
+业务术语采用 [BPW 变更审批工作定义](.skills-doc/CONTEXT.md)：Core BPW 为内部变更审批，OEM BPW 为客户相关变更审批；英文全称仍待确认。服务器现已确认使用 Docker Compose，更新代码与数据卷请使用 [Docker 更新步骤](docs/deployment.md#docker-compose-更新现有服务器)。

@@ -136,3 +136,9 @@ Status: `awaiting-acceptance`（本次新规则重导已完成；Phase-5 歧义�
 用户明确取消此前“存量完成状态不动”的例外；在备份后从 importSource 保存的原始行重放，重新计算完成。原始日期锁定用于保留计划基准，本次仅解释原因，未收到放开普通编辑的要求。
 
 本次重导已实际写入本地数据库：46 项目、198 个完成按新规则调整为 5 个，193 个重新开放；完整备份与 CAS 校验通过。159 pytest、55 Vitest、36 Playwright 全部通过。详见 `../../docs/data-reimport-2026-09-22.md`。Phase-5 只剩 Q1/Q3/Q4 歧义映射待确认；此前“未写数据库/存量不改”段落为历史记录，以本段为准。
+
+## BPW 工作定义与 Docker 发布补充
+
+按用户提出的解释暂定“BPW 变更审批流程”为项目工作定义：Core 为内部审批，OEM 为客户相关审批或客户批准记录；Business Process Workflow 仍是候选全称。术语见 `../../.skills-doc/CONTEXT.md`。这不自动解决原 Excel 未区分 Core/OEM 的 BPW 列及多编号映射问题。服务器方式已明确为 Docker Compose，停服备份、数据卷更新和版本保护的部署步骤已补齐，见 `../../docs/deployment.md`。
+
+Docker 安装脚本先在临时副本完成迁移，再备份旧数据库（含已提交 WAL）并替换，同时将 revision 提升到旧库与发布库之上。167 pytest、ruff、ty 通过；隔离 Compose 实测旧库 revision 100 更新至 101、迁移至 0005、52 项目/46 导入项目/5 个已完成导入动作正确、旧页面写入返回 409、健康检查通过，发布数据库未改动。服务器尚未执行更新。

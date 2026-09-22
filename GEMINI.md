@@ -52,3 +52,9 @@ Don't pick up an issue on your own initiative in a session that is already doing
 - **Generated diagrams**: edit the spec and regenerate; the HTML is output.
 - **Implementation reference**: only a figure a constitution doc links; the rest is presentation, the doc is the truth.
 <!-- /module:design -->
+
+<!-- module:domain-language -->
+# Domain language
+
+When defining BPW terms or interpreting Core/OEM approval scope, read [.skills-doc/CONTEXT.md](.skills-doc/CONTEXT.md).
+<!-- /module:domain-language -->
