@@ -752,3 +752,145 @@ test("custom team labels are displayed as text without executing markup", async 
   expect(await page.evaluate("window.injected")).toBeUndefined();
   await expect(page.locator("#main .team img")).toHaveCount(0);
 });
+
+test("BPW, CVS CR and OEM - Tech columns map to actions and master data (2026-09-23 decision)", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () =>
+    (window as any).eval(`(async()=>{
+    const labeled=projects.find(project=>project.id==='TR-2026-019');
+    const unlabeled=projects.find(project=>project.id==='TR-2026-014');
+    const cvsApplicableBefore=unlabeled.actions.find(a=>a.tab==='CVS CR'&&a.act==='Identify if applicable or not').value;
+    const headers=['Project ID','Part Number','Description','BPW','CVS CR','OEM - Tech','CR'];
+    const rows=[
+      headers,
+      [labeled.id,labeled.pn,'Labeled split','BPW-26-34300066 Ford\\nBPW-25-34300392  STLA\\nBPW-26-34300153 Core','CR0625915','Buckles 3F','CR0619296'],
+      [unlabeled.id,unlabeled.pn,'Unlabeled default','BPW-25-4110130','TBD','SPR4','CR0604745'],
+    ];
+    const base=contentKey(snapshot());
+    const plan=await prepareImport(rows,'bpw-mapping.xlsx','Project');
+    const pick=(p,tab,act)=>plan.projects.find(project=>project.id===p.id).actions.find(a=>a.tab===tab&&a.act===act);
+    return {
+      errors:plan.issues.filter(issue=>issue.blocking),
+      labeled:{
+        tech:plan.projects.find(project=>project.id===labeled.id).tech,
+        core:{value:pick(labeled,'Core BPW','Input BPW number').value,status:pick(labeled,'Core BPW','Input BPW number').status,done:pick(labeled,'Core BPW','Input BPW number').done},
+        oem:{value:pick(labeled,'OEM BPW','Identify BPW number').value},
+        cvs:{value:pick(labeled,'CVS CR','Input CR number for CVS on Windchill').value,status:pick(labeled,'CVS CR','Input CR number for CVS on Windchill').status},
+        cvsApplicable:{before:cvsApplicableBefore,after:pick(unlabeled,'CVS CR','Identify if applicable or not').value},
+        cr:{status:pick(labeled,'CR','Input CR number').status},
+        warnings:plan.projects.find(project=>project.id===labeled.id).importWarnings,
+      },
+      unlabeled:{
+        tech:plan.projects.find(project=>project.id===unlabeled.id).tech,
+        core:{value:pick(unlabeled,'Core BPW','Input BPW number').value,status:pick(unlabeled,'Core BPW','Input BPW number').status},
+        warnings:plan.projects.find(project=>project.id===unlabeled.id).importWarnings,
+      },
+      ambiguous:plan.projects.flatMap(project=>(project.importWarnings||[]).filter(w=>w.includes('Unmapped / ambiguous'))),
+    };
+  })()`),
+  );
+  expect(result.errors).toEqual([]);
+  expect(result.labeled.tech).toBe("Buckles 3F");
+  expect(result.labeled.core).toEqual({
+    value: "BPW-26-34300153 Core",
+    status: "initiated",
+    done: null,
+  });
+  expect(result.labeled.oem.value).toBe(
+    "BPW-26-34300066 Ford\nBPW-25-34300392  STLA",
+  );
+  expect(result.labeled.cvs).toEqual({
+    value: "CR0625915",
+    status: "initiated",
+  });
+  expect(result.labeled.cvsApplicable.after).toBe(
+    result.labeled.cvsApplicable.before,
+  );
+  expect(result.labeled.cr.status).toBe("initiated");
+  expect(result.labeled.warnings.join("\n")).not.toContain("assumed Core");
+  expect(result.unlabeled.tech).toBe("SPR4");
+  expect(result.unlabeled.core).toEqual({
+    value: "BPW-25-4110130",
+    status: "initiated",
+  });
+  expect(result.unlabeled.warnings.join("\n")).toContain(
+    "BPW: 1 number without a Core/OEM label — assumed Core",
+  );
+  expect(result.unlabeled.warnings.join("\n")).toContain(
+    "CVS CR: Unresolved value retained: TBD",
+  );
+  expect(result.ambiguous).toEqual([]);
+
+  const applied = await page.evaluate(async () =>
+    (window as any).eval(`(async()=>{
+    const headers=['Project ID','Part Number','Description','BPW','CVS CR','OEM - Tech','CR'];
+    const p=projects.find(project=>project.id==='TR-2026-019');
+    const rows=[headers,[p.id,p.pn,'Labeled split','BPW-26-34300066 Ford\\nBPW-25-34300392  STLA\\nBPW-26-34300153 Core','CR0625915','Buckles 3F','CR0619296']];
+    const base=contentKey(snapshot());
+    const plan=await prepareImport(rows,'bpw-mapping.xlsx','Project');
+    pendingImport={rows,filename:'bpw-mapping.xlsx',sheet:'Project',fallbackDate:'',base,plan};showImportPreview();
+    return plan.issues.filter(issue=>issue.blocking).length;
+  })()`),
+  );
+  expect(applied).toBe(0);
+  await page.locator("#importReviewed").check();
+  await page.locator("#importApply").click();
+  await ready(page);
+  await page.reload();
+  await ready(page);
+  const saved = await page.evaluate("projects.find(p=>p.id==='TR-2026-019')");
+  expect(saved.tech).toBe("Buckles 3F");
+  expect(
+    saved.actions.find(
+      (a: { tab: string; act: string }) =>
+        a.tab === "Core BPW" && a.act === "Input BPW number",
+    ),
+  ).toMatchObject({ value: "BPW-26-34300153 Core", status: "initiated" });
+  expect(
+    saved.actions.find(
+      (a: { tab: string; act: string }) =>
+        a.tab === "OEM BPW" && a.act === "Identify BPW number",
+    ).value,
+  ).toBe("BPW-26-34300066 Ford\nBPW-25-34300392  STLA");
+});
+
+test("resetting to demo data warns about non-demo projects and downloads a backup first", async ({
+  page,
+}) => {
+  const demoOnly = await page.evaluate(() => {
+    const confirmMessages: string[] = [];
+    let backupCalls = 0;
+    window.confirm = (message: string) => {
+      confirmMessages.push(message);
+      return false;
+    };
+    (window as any).saveWorkspaceFile = () => {
+      backupCalls++;
+    };
+    resetDemo();
+    return { confirmMessages, backupCalls, projectCount: projects.length };
+  });
+  expect(demoOnly.projectCount).toBe(6);
+  expect(demoOnly.backupCalls).toBe(0);
+  expect(demoOnly.confirmMessages[0]).not.toContain("not part of the demo");
+
+  const withExtra = await page.evaluate(() => {
+    const confirmMessages: string[] = [];
+    let backupCalls = 0;
+    window.confirm = (message: string) => {
+      confirmMessages.push(message);
+      return true;
+    };
+    (window as any).saveWorkspaceFile = () => {
+      backupCalls++;
+    };
+    projects.push({ ...structuredClone(projects[0]), id: "IMP-E2E-1" });
+    resetDemo();
+    return { confirmMessages, backupCalls, projectCount: projects.length };
+  });
+  expect(withExtra.confirmMessages[0]).toContain("not part of the demo");
+  expect(withExtra.confirmMessages[0]).toContain("including imported data");
+  expect(withExtra.backupCalls).toBe(1);
+  expect(withExtra.projectCount).toBe(6);
+});

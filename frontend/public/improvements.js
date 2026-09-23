@@ -339,6 +339,8 @@ const importedAliases = {
   ...ALIASES,
   po: [...ALIASES.po, "zftoolpo"],
   saving: [...ALIASES.saving, "savingsanualestimated"],
+  // 2026-09-23：真实表的 "OEM - Tech" 列是产品技术平台分类，落主数据 tech 字段。
+  tech: [...ALIASES.tech, "oemtech"],
 };
 const sourceText = (value) =>
   value instanceof Date
@@ -465,18 +467,25 @@ async function prepareImport(rows, filename, sheetName, fallbackDate = "") {
       );
     for (const action of project.actions) {
       const exact = Workflow.normalize(colName(action, project.actions));
+      // 2026-09-23：别名支持 "tab" 与 "tab|act" 两级键——真实表的 CVS CR 列只喂
+      // 编号动作，不误伤同 tab 的适用性动作。
       const actionAliases = {
         "Current Coverage": ["coverage"],
         SOP: ["tier2sop"],
         Change: ["changeinternalexternal"],
+        "CVS CR|Input CR number for CVS on Windchill": ["cvscr"],
       };
+      const columnAliases = [
+        ...(actionAliases[action.tab] || []),
+        ...(actionAliases[`${action.tab}|${action.act}`] || []),
+      ];
       const dual = Workflow.dateHistoryRule(action.ph, action.tab, action.act);
       const rule = Workflow.statusRule(action.ph, action.tab, action.act);
       const column = colName(action, project.actions);
       const hasColumn = suffix => headers.some(h => Workflow.normalize(h) === Workflow.normalize(`${column} — ${suffix}`));
       const extra = suffix => sourceText(get([Workflow.normalize(`${column} — ${suffix}`)]));
-      const hasValue = (dual && hasColumn("Current date")) || headers.some(h => [exact, ...(actionAliases[action.tab] || [])].includes(Workflow.normalize(h)));
-      const raw = dual && hasColumn("Current date") ? extra("Current date") : get([exact, ...(actionAliases[action.tab] || [])]);
+      const hasValue = (dual && hasColumn("Current date")) || headers.some(h => [exact, ...columnAliases].includes(Workflow.normalize(h)));
+      const raw = dual && hasColumn("Current date") ? extra("Current date") : get([exact, ...columnAliases]);
       const importedStatus = extra("Approval status");
       if (rule && hasColumn("Approval status") && importedStatus && !Workflow.STATUS_VALUES.includes(importedStatus))
         issue(`${action.tab}: Invalid approval status.`, true);
@@ -513,6 +522,8 @@ async function prepareImport(rows, filename, sheetName, fallbackDate = "") {
       if (rule) {
         if (hasColumn("Approval status")) action.status = importedStatus;
         else if (action.status === "approved") action.status = "in_progress";
+        // 2026-09-23（用户拍板）：导入有效编号即视为流程已发起；录入≠完成不变。
+        else if (hasValue && result.value) action.status = "initiated";
       }
       const validImportedValue = hasValue ? Boolean(result.value) : Boolean(action.value) && Workflow.validValue(action, action.value);
       const closes = Workflow.closesRule(action.ph, action.tab, action.act);
@@ -533,7 +544,37 @@ async function prepareImport(rows, filename, sheetName, fallbackDate = "") {
       if (previousDone && !action.done)
         issue(`${action.tab}: Reopened — this import does not provide the completion or approval required by the current rules.`);
     }
-    const ambiguous = ["BPW", "CVS CR", "OEM - Tech"].filter((name) =>
+    // 2026-09-23（用户拍板按推测关系映射）：BPW 列一格可混装内部/客户审批编号，
+    // 按文字标签拆分填入 Core BPW / OEM BPW；无标签默认归 Core 并留痕；纯占位不写值。
+    const bpwCell = sourceText(get(["bpw"]));
+    if (bpwCell) {
+      const split = Workflow.splitBpwCell(bpwCell);
+      const coreBpw = project.actions.find(
+        (a) => a.tab === "Core BPW" && a.act === "Input BPW number",
+      );
+      const oemBpw = project.actions.find(
+        (a) => a.tab === "OEM BPW" && a.act === "Identify BPW number",
+      );
+      if (split.core.length && coreBpw) {
+        updateActionValue(coreBpw, split.core.join("\n"), "import");
+        coreBpw.done = null;
+        if (coreBpw.status === "approved") coreBpw.status = "in_progress";
+        else if (!coreBpw.status) coreBpw.status = "initiated";
+      }
+      if (split.oem.length && oemBpw) {
+        updateActionValue(oemBpw, split.oem.join("\n"), "import");
+        oemBpw.done = null;
+      }
+      if (split.unlabeled)
+        issue(
+          `BPW: ${split.unlabeled} number${split.unlabeled > 1 ? "s" : ""} without a Core/OEM label — assumed Core; confirm with the business owner.`,
+        );
+      if (!split.hasNumber)
+        issue(`BPW: Unresolved value retained: ${bpwCell}`);
+    }
+    // 2026-09-23：BPW / CVS CR / OEM - Tech 已按用户拍板的推测关系映射
+    // （docs/bpw-mapping-2026-09-23.md）。歧义清单清空，机制保留给将来无法映射的列。
+    const ambiguous = [].filter((name) =>
       sourceText(get([Workflow.normalize(name)])),
     );
     if (ambiguous.length)

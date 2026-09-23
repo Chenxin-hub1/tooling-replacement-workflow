@@ -49,9 +49,9 @@ Spec: specs/v2-portfolio-filters.md
 
 ## Phase-5: 导入导出对齐与真实数据重导
 
-Status: `in-progress`
+Status: `awaiting-acceptance`（歧义映射已于 2026-09-23 按用户拍板落地并重导，见文末记录）
 
-Description: 导入导出适配状态与双日期字段；按新规则重导已有来源行，BPW / CVS CR / OEM - Tech 歧义映射待 Q1/Q3/Q4 后补齐。本 Phase 承接 v1 Phase-4 的遗留重导事项（见"v1 收尾安排"）。
+Description: 导入导出适配状态与双日期字段；按新规则重导已有来源行，BPW / CVS CR / OEM - Tech 歧义映射原待 Q1/Q3/Q4，2026-09-23 用户决定直接采用数据分析推测的关系并已实现重导。本 Phase 承接 v1 Phase-4 的遗留重导事项（见"v1 收尾安排"）。
 
 Spec: specs/v2-excel-realign.md
 
@@ -102,7 +102,7 @@ v1 曾记录"UI 与功能完全遵循原始样板，禁止独立设计"。自本
 
 - B6：搁置至评审人澄清；
 - Q1–Q5：不阻塞 B 类实施；Q1 顺带确认 BPW 全称、一格多号（Ford/STLA）归 Core/OEM 规则；Q5 答复前通知维持预览；
-- Q2 已由用户要求按新规则重导解决；Q1/Q3/Q4 的歧义映射仍不推测。
+- Q2 已由用户要求按新规则重导解决；Q1/Q3/Q4 的歧义映射仍不推测。（2026-09-23 更新：Q1 的一格多号规则与 Q3/Q4 的歧义映射已由用户拍板按推测关系落地，见文末；仅 BPW 英文全称仍待业务确认。）
 
 ## v1 收尾安排（随本提案接受一并生效）
 
@@ -142,3 +142,9 @@ Status: `awaiting-acceptance`（本次新规则重导已完成；Phase-5 歧义�
 按用户提出的解释暂定“BPW 变更审批流程”为项目工作定义：Core 为内部审批，OEM 为客户相关审批或客户批准记录；Business Process Workflow 仍是候选全称。术语见 `../../.skills-doc/CONTEXT.md`。这不自动解决原 Excel 未区分 Core/OEM 的 BPW 列及多编号映射问题。服务器方式已明确为 Docker Compose，停服备份、数据卷更新和版本保护的部署步骤已补齐，见 `../../docs/deployment.md`。
 
 Docker 安装脚本先在临时副本完成迁移，再备份旧数据库（含已提交 WAL）并替换，同时将 revision 提升到旧库与发布库之上。167 pytest、ruff、ty 通过；隔离 Compose 实测旧库 revision 100 更新至 101、迁移至 0005、52 项目/46 导入项目/5 个已完成导入动作正确、旧页面写入返回 409、健康检查通过，发布数据库未改动。服务器尚未执行更新。
+
+## BPW / CVS CR / OEM - Tech 歧义映射落地（2026-09-23）
+
+Status: `awaiting-acceptance`
+
+用户拍板不再等待 Q1/Q3/Q4 答复，直接采用对 46 行 importSource 原文的数据分析推测关系（一格多号按文字标签 Ford/STLA/Core 分流、无标签默认 Core 并逐行留痕、编号导入即置 initiated 不算完成、OEM - Tech 落主数据 `tech` 字段），实现于 `workflow-core.js`（`splitBpwCell`）与 `improvements.js`（`prepareImport`），重导经真实页面链路执行：46/46 处理、0 阻断、revision 3 → 4、完成数 5 → 5、非导入项目与全部 ID/依赖保持；重导驱动固化为 `frontend/scripts/reimport-workspace.mjs` 可复用。验证：167 pytest、60 Vitest、37 Playwright、ruff/ty/prettier/构建全绿。证据与口径详见 `../../docs/bpw-mapping-2026-09-23.md`。此前各段"歧义映射待确认"的表述以本段为准；剩余仅 BPW 英文全称（原 Q1 之一）与 6 行 External 无标签编号的 Core 假设待业务核对。

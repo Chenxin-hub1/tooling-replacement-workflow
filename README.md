@@ -29,7 +29,7 @@ Portfolio、My actions、Management、Reminders、Admin · People & functions、
 
 ## 当前边界
 
-Today 已改为实际日期。邮件/Teams 仅预览、不会真实发送；按用户要求暂不启用登录账号。真实数据的歧义保留待核对，缺少创建日期时不导入。详见 [已授权优化](docs/optimization-2026-09-15.md)。
+Today 已改为实际日期。邮件/Teams 仅预览、不会真实发送；按用户要求暂不启用登录账号。真实数据的歧义映射已于 2026-09-23 按用户拍板落地，缺少创建日期时不导入。详见 [已授权优化](docs/optimization-2026-09-15.md)。
 
 ## 验证
 
@@ -48,7 +48,7 @@ cd ..
 - [当前评审路线图](constitution-doc/roadmap/v2-review-feedback.md)
 - [全项目核验与修复记录](docs/project-verification-2026-09-22.md)
 
-真实 Excel 已于 2026-09-18 按领导指示正式导入（46 条，创建日期统一导入当日；备份与核对记录见 [接入前核对](docs/real-data-readiness.md)）；BPW / CVS CR 等歧义映射仍待业务确认，确认后重导即按身份更新。本机可用 `TOOLING_PORT=8765 ./scripts/start.sh` 启动（8000 端口被其他应用占用）。仓库已于 2026-09-18 推送至 GitHub（Chenxin-hub1/tooling-replacement-workflow，Private）；按用户决定，业务数据库 `backend/tooling.db` 随仓库分发，Git 是代码与数据的单一部署通道。
+真实 Excel 已于 2026-09-18 按领导指示正式导入（46 条，创建日期统一导入当日；备份与核对记录见 [接入前核对](docs/real-data-readiness.md)）；BPW / CVS CR / OEM - Tech 三列已于 2026-09-23 按用户拍板的推测映射落地并重导（[映射记录](docs/bpw-mapping-2026-09-23.md)），无标签 BPW 编号默认归 Core 并逐行留痕，页面可手动修改、确认后重导即批量修正。本机可用 `TOOLING_PORT=8765 ./scripts/start.sh` 启动（8000 端口被其他应用占用）。仓库已于 2026-09-18 推送至 GitHub（Chenxin-hub1/tooling-replacement-workflow，Private）；按用户决定，业务数据库 `backend/tooling.db` 随仓库分发，Git 是代码与数据的单一部署通道。
 
 2026-09-22：历史导入已按新规则重新处理并写入随仓库分发的数据库（46 项目、原 198 个完成调整为 5 个，193 个重新开放）。服务器更新前须停服备份；默认直启方式的完整命令见 [Git 更新部署步骤](docs/deployment.md#本次版本从-git-更新到-linux-服务器2026-09-22)，数据核验见 [重导记录](docs/data-reimport-2026-09-22.md)。
 

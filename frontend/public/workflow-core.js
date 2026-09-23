@@ -215,6 +215,32 @@ globalThis.Workflow = (() => {
     if (closes) return closes.closes.includes(action.value);
     return Boolean(action.value);
   }
+  /* 2026-09-23 BPW 列拆分（用户拍板按推测关系映射）：一格可含多个审批编号，
+     按段内文字标签分流——core 视为内部审批，ford/stla 等其他文字标签视为客户审批，
+     无标签默认归 Core 并计数（导入时留痕提示业务核对）。段保留原文，标签信息不丢失。 */
+  function splitBpwCell(cell) {
+    const parts = String(cell ?? "")
+      .split(/\r?\n|\//)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const number = /bpw[\s-]*\d{2}\s*-\s*\d{3,}/i;
+    const core = [],
+      oem = [];
+    let unlabeled = 0,
+      hasNumber = false;
+    for (const part of parts) {
+      if (!number.test(part)) continue;
+      hasNumber = true;
+      const label = part.replace(number, "").trim();
+      if (/\bcore\b/i.test(label)) core.push(part);
+      else if (/[a-z]{3,}/i.test(label)) oem.push(part);
+      else {
+        core.push(part);
+        unlabeled++;
+      }
+    }
+    return { core, oem, unlabeled, hasNumber };
+  }
   function applyStatusRules(result, args) {
     const meta = args && args.meta;
     if (!meta) return result;
@@ -224,7 +250,7 @@ globalThis.Workflow = (() => {
         ...result,
         done: null,
         warning:
-          "Value recorded; status is missing — the action stays open until the status is Approved.",
+          "Value recorded; the action stays open until the status is Approved.",
       };
     const closes = closesRule(meta.ph, meta.tab, meta.act);
     if (
@@ -320,6 +346,7 @@ globalThis.Workflow = (() => {
     pending,
     isoDate,
     actionValue,
+    splitBpwCell,
     nextId,
     STATUS_VALUES,
     statusRule,

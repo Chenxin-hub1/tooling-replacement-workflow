@@ -478,3 +478,66 @@ describe("v2 migration and portfolio filters", () => {
     ).toBe("interim");
   });
 });
+
+describe("v2 Phase-5 BPW cell split (2026-09-23 user decision)", () => {
+  it("splits a labeled multi-number cell into Core and OEM parts verbatim", () => {
+    const cell =
+      "BPW-26-34300066 Ford\r\nBPW-25-34300392  STLA\r\nBPW-26-34300153 Core";
+    expect(core.splitBpwCell(cell)).toMatchObject({
+      core: ["BPW-26-34300153 Core"],
+      oem: ["BPW-26-34300066 Ford", "BPW-25-34300392  STLA"],
+      unlabeled: 0,
+      hasNumber: true,
+    });
+  });
+
+  it("routes unlabeled numbers to Core and counts them for the import warning", () => {
+    expect(core.splitBpwCell("BPW-25-4110130")).toMatchObject({
+      core: ["BPW-25-4110130"],
+      oem: [],
+      unlabeled: 1,
+      hasNumber: true,
+    });
+    expect(core.splitBpwCell("BPW 23-34300301").unlabeled).toBe(1);
+  });
+
+  it("keeps placeholder-only cells without numbers unresolved", () => {
+    expect(core.splitBpwCell("Pending")).toMatchObject({
+      core: [],
+      oem: [],
+      unlabeled: 0,
+      hasNumber: false,
+    });
+    expect(core.splitBpwCell("TBD\r\nPending").hasNumber).toBe(false);
+  });
+
+  it("tolerates slash-separated parts and ignores stray text without numbers", () => {
+    expect(
+      core.splitBpwCell("BPW-26-4110019 / BPW-26-4110020 Core"),
+    ).toMatchObject({
+      oem: [],
+      core: ["BPW-26-4110019", "BPW-26-4110020 Core"],
+      unlabeled: 1,
+    });
+    expect(core.splitBpwCell("see comment above")).toMatchObject({
+      hasNumber: false,
+    });
+  });
+
+  it("leaves import warnings truthful: a recorded number still does not complete", () => {
+    const BPW = {
+      ph: 2,
+      tab: "Core BPW",
+      act: "Input BPW number",
+      input: "BPW number",
+    };
+    const result = core.actionValue(
+      "BPW-26-34300153",
+      "BPW number",
+      "2026-09-23",
+      BPW,
+    );
+    expect(result).toMatchObject({ value: "BPW-26-34300153", done: null });
+    expect(result.warning).toBeTruthy();
+  });
+});

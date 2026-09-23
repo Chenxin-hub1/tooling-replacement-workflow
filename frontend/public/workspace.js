@@ -171,12 +171,17 @@ autosave = async function () {
 };
 
 resetDemo = function () {
-  if (
-    !confirm(
-      "Replace everything with the demo data? Your projects, people and settings on the server will be lost.",
-    )
-  )
-    return;
+  // 误触保护：工作区存在演示之外的项目（如真实导入数据）时，confirm 明示规模，
+  // 并在重置前自动下载当前工作区 JSON——即使服务器滚动快照不可达也能从本地文件恢复。
+  const extra = projects.filter(
+    (p) => !defaultWorkspace.projects.some((d) => d.id === p.id),
+  ).length;
+  const warning =
+    extra > 0
+      ? `Replace the workspace with the demo data? The server currently holds ${projects.length} projects (${extra} of them are not part of the demo, including imported data), plus people and settings. All of it will be replaced by the demo data. A workspace backup file will be downloaded first so you can restore from Admin.`
+      : "Replace everything with the demo data? Your projects, people and settings on the server will be lost.";
+  if (!confirm(warning)) return;
+  if (extra > 0) saveWorkspaceFile();
   Object.keys(EMAILS).forEach((key) => delete EMAILS[key]);
   restore(structuredClone(defaultWorkspace));
   MANUAL = [];
