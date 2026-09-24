@@ -931,3 +931,24 @@ for (const timezoneId of ["Asia/Taipei", "America/Los_Angeles"]) {
     });
   });
 }
+
+test("portfolio filters drop empty BU and supplier values instead of showing a blank option", async ({
+  page,
+}) => {
+  const result = await page.evaluate(() =>
+    (window as any).eval(`(()=>{
+    projects.forEach(p=>{p.bu='';});projects[0].cur='';projects[1].nw='';render();
+    const selects=[...document.querySelectorAll('.filters select')];
+    const pick=label=>selects.find(s=>s.options[0].textContent===label);
+    const bu=pick('BU'),supplier=pick('Supplier');
+    return {
+      buOptions:[...bu.options].map(o=>o.textContent),
+      buShown:bu.options[bu.selectedIndex].textContent,
+      supplierEmpty:[...supplier.options].filter(o=>o.textContent==='').length,
+    };
+  })()`),
+  );
+  expect(result.buOptions).toEqual(["BU"]);
+  expect(result.buShown).toBe("BU");
+  expect(result.supplierEmpty).toBe(0);
+});

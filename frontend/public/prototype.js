@@ -184,13 +184,13 @@ function render(){
 function allPeople(){return [...new Set(Object.values(PEOPLE).flat())]}
 
 function filterBar(showActionFilters){
-  const uniq=k=>[...new Set(projects.map(p=>p[k]))];
+  const uniq=k=>[...new Set(projects.map(p=>p[k]))].filter(Boolean);
   return `<div class="filters">
    <input placeholder="Project / part no." value="${escHtml(F.q)}" oninput="F.q=this.value;render()">
    <select onchange="F.owner=this.value;render()"><option value="">Project owner</option>${allPeople().map(x=>`<option ${x===F.owner?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
    <select onchange="F.bu=this.value;render()"><option value="">BU</option>${uniq('bu').map(x=>`<option ${x===F.bu?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
    <select onchange="F.plant=this.value;render()"><option value="">Plant</option>${uniq('plant').map(x=>`<option ${x===F.plant?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
-   <select onchange="F.supplier=this.value;render()"><option value="">Supplier</option>${[...new Set(projects.flatMap(p=>[p.cur,p.nw]))].map(x=>`<option ${x===F.supplier?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
+   <select onchange="F.supplier=this.value;render()"><option value="">Supplier</option>${[...new Set(projects.flatMap(p=>[p.cur,p.nw]))].filter(Boolean).map(x=>`<option ${x===F.supplier?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
    <select onchange="F.phase=this.value;render()"><option value="">Phase</option>${PHASES.map((x,i)=>`<option value="${i}" ${String(i)===F.phase?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
    <select onchange="F.status=this.value;render()"><option value="">Status</option>${['green','yellow','red','gray'].map(x=>`<option value="${x}" ${x===F.status?'selected':''}>${PSL[x]}</option>`).join('')}</select>
    ${showActionFilters?`<select onchange="F.fn=this.value;render()"><option value="">Function</option>${FUNCTIONS.map(x=>`<option ${x===F.fn?'selected':''}>${escHtml(x)}</option>`).join('')}</select>
