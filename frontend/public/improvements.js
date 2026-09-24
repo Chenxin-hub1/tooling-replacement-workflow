@@ -679,10 +679,13 @@ importExcel = async function (file) {
     const range = XLSX.utils.decode_range(workbook.Sheets[sheet]["!ref"] || "A1");
     if (range.e.r >= 10001 || range.e.c >= 1000)
       throw new Error("Use up to 10000 data rows and 1000 columns.");
+    // 日期格按 UTC 零点取 Date：不加 UTC 时 SheetJS 给的是本地零点，
+    // 东八区浏览器经 toISOString 会早一天（2026-09-24 修复，e2e 覆盖两个时区）。
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheet], {
       header: 1,
       defval: "",
       raw: true,
+      UTC: true,
     });
     if (rows.length < 2 || rows.length > 10001 || rows[0].length > 1000)
       throw new Error(

@@ -43,6 +43,7 @@ cd ..
 
 浏览器测试将原始样板与发布页面使用同一浏览器、字体和数据截图比较，并覆盖跨浏览器保存、版本冲突及原样板 Excel。比较时统一两处保存说明，忽略每通道不超过 8/255 的抗锯齿噪声，其余允许最多 5 个像素差异。测试数据库与本机业务数据库隔离。
 
+- [整体功能流程说明](specs/overview.md)
 - [样板对齐与交接](handoff-tooling-replacement-workflow.md)
 - [Excel 使用说明](docs/excel.md)
 - [当前评审路线图](constitution-doc/roadmap/v2-review-feedback.md)
@@ -53,3 +54,5 @@ cd ..
 2026-09-22：历史导入已按新规则重新处理并写入随仓库分发的数据库（46 项目、原 198 个完成调整为 5 个，193 个重新开放）。服务器更新前须停服备份；默认直启方式的完整命令见 [Git 更新部署步骤](docs/deployment.md#本次版本从-git-更新到-linux-服务器2026-09-22)，数据核验见 [重导记录](docs/data-reimport-2026-09-22.md)。
 
 业务术语采用 [BPW 变更审批工作定义](.skills-doc/CONTEXT.md)：Core BPW 为内部变更审批，OEM BPW 为客户相关变更审批；英文全称仍待确认。服务器现已确认使用 Docker Compose，更新代码与数据卷请使用 [Docker 更新步骤](docs/deployment.md#docker-compose-更新现有服务器)。
+
+2026-09-24：修复浏览器导入日期格在东八区早一天的问题，并用源表重导 46 条（修订 6，31 处日期 +1 天，完成状态与编号不变），见 [重导记录](docs/date-reimport-2026-09-24.md)；16 个双日期动作的原始日期已按 Admin 修正路径批量改正并留痕（修订 7）。

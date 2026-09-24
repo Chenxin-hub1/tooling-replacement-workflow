@@ -894,3 +894,40 @@ test("resetting to demo data warns about non-demo projects and downloads a backu
   expect(withExtra.backupCalls).toBe(1);
   expect(withExtra.projectCount).toBe(6);
 });
+
+// 真实日期单元格：SheetJS 读出的 Date 对象必须表示表格里显示的日历日期，
+// 与浏览器时区无关（东八区曾把 2026-09-23 记成 2026-09-22）。
+for (const timezoneId of ["Asia/Taipei", "America/Los_Angeles"]) {
+  test.describe(`Excel date cells in ${timezoneId}`, () => {
+    test.use({ timezoneId });
+    test("real date cells import as the calendar date shown in the sheet", async ({
+      page,
+    }) => {
+      const result = await page.evaluate(async () =>
+        (window as any).eval(`(async()=>{
+        const sheet=XLSX.utils.aoa_to_sheet([
+          ['Part Number','Description','Created','FOT Date','SOP'],
+          ['DATE-CELL','Date cell test',new Date(2026,8,18),new Date(2026,8,23),new Date(2026,11,1)],
+        ],{cellDates:true});
+        const workbook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(workbook,sheet,'Project');
+        const file=new File([XLSX.write(workbook,{type:'array',bookType:'xlsx'})],'dates.xlsx');
+        await importExcel(file);
+        const project=pendingImport.plan.projects.find(p=>p.pn==='DATE-CELL');
+        const value=tab=>project.actions.find(a=>a.tab===tab).value;
+        return {
+          blocking:pendingImport.plan.issues.filter(i=>i.blocking),
+          created:d2s(project.created),
+          fot:value('FOT Date'),
+          sop:value('SOP'),
+          raw:project.importSource.values.slice(2),
+        };
+      })()`),
+      );
+      expect(result.blocking).toEqual([]);
+      expect(result.created).toBe("2026-09-18");
+      expect(result.fot).toBe("2026-09-23");
+      expect(result.sop).toBe("2026-12-01");
+      expect(result.raw).toEqual(["2026-09-18", "2026-09-23", "2026-12-01"]);
+    });
+  });
+}
